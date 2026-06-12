@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リアルタイム ニュース検索方式 比較表 - AutoNewsDistributionTool</title>
+<style>
+  :root {
+    --c-bg: #f7f8fa;
+    --c-card: #ffffff;
+    --c-border: #e1e4e8;
+    --c-text: #24292f;
+    --c-muted: #6b7280;
+    --c-accent: #0969da;
+    --c-good: #1f883d;
+    --c-warn: #bf8700;
+    --c-bad: #cf222e;
+    --c-info-bg: #ddf4ff;
+    --c-info-border: #54aeff;
+    --c-table-head: #f0f3f6;
+    --c-zebra: #fafbfc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", Meiryo, sans-serif;
+    color: var(--c-text);
+    background: var(--c-bg);
+    margin: 0;
+    padding: 24px;
+    line-height: 1.6;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #0969da 0%, #218bff 100%);
+    color: white;
+    padding: 32px 28px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 12px rgba(9, 105, 218, 0.15);
+  }
+  header h1 { margin: 0 0 8px; font-size: 28px; }
+  header p { margin: 4px 0; opacity: 0.92; }
+  .meta { font-size: 13px; opacity: 0.85; }
+
+  h2 {
+    border-left: 4px solid var(--c-accent);
+    padding-left: 12px;
+    margin-top: 36px;
+    font-size: 22px;
+  }
+  h3 { margin-top: 24px; font-size: 17px; color: #1f2937; }
+
+  .card {
+    background: var(--c-card);
+    border: 1px solid var(--c-border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  .callout {
+    background: var(--c-info-bg);
+    border-left: 4px solid var(--c-info-border);
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  .callout strong { color: #0550ae; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 13.5px;
+    background: white;
+  }
+  th, td {
+    border: 1px solid var(--c-border);
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--c-table-head);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody tr:nth-child(even) { background: var(--c-zebra); }
+  tbody tr:hover { background: #f1f8ff; }
+
+  /* 評価バッジ */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .b-good   { background: #dcfce7; color: var(--c-good); }
+  .b-mid    { background: #fef3c7; color: var(--c-warn); }
+  .b-bad    { background: #fee2e2; color: var(--c-bad); }
+  .b-info   { background: #dbeafe; color: var(--c-accent); }
+  .b-default{ background: #e5e7eb; color: #374151; }
+
+  .score { font-weight: bold; font-size: 15px; }
+  .score-A { color: var(--c-good); }
+  .score-B { color: #16a34a; }
+  .score-C { color: var(--c-warn); }
+  .score-D { color: #ea580c; }
+  .score-E { color: var(--c-bad); }
+
+  .name-cell { font-weight: 600; min-width: 130px; }
+  .name-sub { font-size: 11px; color: var(--c-muted); font-weight: normal; display: block; margin-top: 2px; }
+
+  /* 横スクロール対応＋ヘッダー行・先頭列フリーズ */
+  .table-wrap {
+    overflow: auto;
+    max-height: 80vh;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--c-border);
+    border-radius: 8px;
+    background: white;
+    position: relative;
+  }
+  .table-wrap table { margin: 0; border: none; }
+
+  /* ヘッダー行を上部固定 */
+  .table-wrap thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--c-table-head);
+    /* border-collapse 環境下で罫線が消えないよう影で代替 */
+    box-shadow:
+      inset 0 1px 0 var(--c-border),
+      inset 0 -1px 0 var(--c-border);
+  }
+
+  /* 先頭列を左固定 */
+  .table-wrap tbody td:first-child,
+  .table-wrap tbody th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: white;
+    box-shadow:
+      inset -1px 0 0 var(--c-border),
+      inset 1px 0 0 var(--c-border);
+  }
+
+  /* ゼブラ縞を先頭列にも適用 */
+  .table-wrap tbody tr:nth-child(even) td:first-child,
+  .table-wrap tbody tr:nth-child(even) th:first-child {
+    background: var(--c-zebra);
+  }
+
+  /* ホバー状態を先頭列にも適用 */
+  .table-wrap tbody tr:hover td:first-child,
+  .table-wrap tbody tr:hover th:first-child {
+    background: #f1f8ff;
+  }
+
+  /* 左上の角セル（先頭行 × 先頭列）は両方向に固定し最前面 */
+  .table-wrap thead th:first-child {
+    left: 0;
+    z-index: 3;
+    background: var(--c-table-head);
+    box-shadow:
+      inset 1px 1px 0 var(--c-border),
+      inset -1px -1px 0 var(--c-border);
+  }
+
+  /* サマリ行 */
+  .summary-row td { background: #fefce8 !important; font-weight: 600; }
+  .table-wrap .summary-row td:first-child {
+    background: #fefce8 !important;
+    box-shadow:
+      inset -1px 0 0 var(--c-border),
+      inset 1px 0 0 var(--c-border);
+  }
+
+  /* 最終推奨 */
+  .recommend-card {
+    background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+    border: 2px solid var(--c-good);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+  }
+  .recommend-card h3 { margin-top: 0; color: var(--c-good); }
+
+  /* 凡例 */
+  .legend {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    margin: 8px 0 16px;
+    align-items: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 4px; }
+
+  details { margin: 12px 0; }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 8px 12px;
+    background: #f6f8fa;
+    border-radius: 6px;
+    user-select: none;
+  }
+  details[open] summary { margin-bottom: 8px; }
+
+  code {
+    background: #f3f4f6;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-family: "SF Mono", "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px;
+    color: #be185d;
+  }
+
+  ul.compact li { margin: 4px 0; }
+
+  footer {
+    text-align: center;
+    color: var(--c-muted);
+    font-size: 12px;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--c-border);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <h1>リアルタイム ニュース検索方式 比較表</h1>
+  <p>AutoNewsDistributionTool ― カチタス実需中古住宅向け 不動産ニュース自動配信</p>
+  <p class="meta">作成日: 2026-05-15 ／ 対象規模: 月30起動 × 1起動あたり最大50検索（=月1,500クエリ） ／ 配信時刻: JST 08:00</p>
+</header>
+
+<div class="card">
+  <h2 style="margin-top:0;">本ドキュメントの目的</h2>
+  <p>
+    Bedrock の <code>search_real_news</code> ツールが内部で叩く Web Search API について、現行候補（Brave / Tavily）に加えて Google・Bedrock Deep Research などを含めた <strong>9 種類</strong> をフラットに比較する。
+    観点は「<strong>カチタスの不動産ニュース配信で実際に効くか</strong>」に絞り、机上の理想ではなく月3,000円未満の運用予算で月30回安定配信できるかを軸に判定する。
+  </p>
+  <div class="callout">
+    <strong>前提となる利用パターン</strong>:<br>
+    ① 1日1回 08:00 JST に Lambda 起動 → ② Bedrock Opus 4.7 が agentic loop で <strong>5〜50 回</strong>の Web 検索を実行 → ③ 5件のニュースを抽出し SES + Slack に配信。
+    検索クエリは日本語中心、対象は「不動産・PropTech・法規制・市況・リフォーム」、リアルタイム性は <strong>過去24〜72時間</strong>のニュースで十分。
+  </div>
+</div>
+
+<!-- ============================================ -->
+<h2>① 比較対象の選定</h2>
+<!-- ============================================ -->
+<div class="card">
+  <p>ユーザー指定の4方式（Tavily / Brave / Google / Bedrock Claude Opus Deep Research）に、<strong>同等以上のティアで Lambda から実用可能な5方式</strong>を加えた計9方式を比較する。</p>
+
+  <div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>方式</th>
+        <th>カテゴリ</th>
+        <th>選定理由 / なぜ同等ティアか</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td class="name-cell">Brave Search API <span class="name-sub">（現行デフォルト）</span></td><td><span class="badge b-info">汎用Web検索</span></td><td>独自インデックス、無料2000q/月。現行実装の基準点。</td></tr>
+      <tr><td>2</td><td class="name-cell">Tavily Search API <span class="name-sub">（現行代替）</span></td><td><span class="badge b-info">LLM特化検索</span></td><td>AIエージェント前提に設計、要約済みコンテンツ返却。</td></tr>
+      <tr><td>3</td><td class="name-cell">Google Custom Search JSON API</td><td><span class="badge b-info">汎用Web検索</span></td><td>世界最大の検索インデックス。日本語カバレッジ最高。</td></tr>
+      <tr><td>4</td><td class="name-cell">Bedrock + Claude Opus Deep Research <span class="name-sub">（AgentCore Browse Tool）</span></td><td><span class="badge b-info">AI統合検索</span></td><td>AWS純正、追加API契約不要、IAM完結。</td></tr>
+      <tr><td>5</td><td class="name-cell">Perplexity Sonar API</td><td><span class="badge b-info">AI統合検索</span></td><td>引用付き要約を一発返却。Sonar Pro は Deep Research 互角の品質。</td></tr>
+      <tr><td>6</td><td class="name-cell">Exa (旧 Metaphor) API</td><td><span class="badge b-info">セマンティック検索</span></td><td>埋め込みベース検索、AIエージェント向けに最適化。</td></tr>
+      <tr><td>7</td><td class="name-cell">SerpAPI <span class="name-sub">（Google/Bing/Yahoo結果プロキシ）</span></td><td><span class="badge b-info">SERPプロキシ</span></td><td>Google結果を構造化JSON取得、News Box / Top Stories対応。</td></tr>
+      <tr><td>8</td><td class="name-cell">NewsAPI.org</td><td><span class="badge b-info">ニュース専用集約</span></td><td>世界150,000ニュースソース集約、ニュース特化型の老舗。</td></tr>
+      <tr><td>9</td><td class="name-cell">Anthropic Web Search Tool <span class="name-sub">（Claude API native）</span></td><td><span class="badge b-info">AI統合検索</span></td><td>Claude側で検索→引用付き回答が完結、追加実装最小。</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <details>
+    <summary>除外した方式（参考）</summary>
+    <ul class="compact">
+      <li><strong>You.com API</strong> — 英語中心で日本語ニュースの取得品質が他と比べ顕著に劣る。</li>
+      <li><strong>Bing Web Search API</strong> — 2025年8月で公式終了済み（Microsoft）。Azure AI Foundry の Grounding with Bing に統合されたが、AWS 構成からは外部依存が増える。</li>
+      <li><strong>GDELT Project</strong> — 完全無料だが、ニュースの「機械翻訳された見出し+トーン分析」が主体で、本文要約や日本語の原文取得には不向き。研究用途。</li>
+      <li><strong>DuckDuckGo Instant Answer / Kagi</strong> — Kagi は B2C 向けで API は限定的、DuckDuckGo はニュース検索が貧弱。</li>
+      <li><strong>RSS 直接購読</strong> — リアルタイム性は最高だが、対象ソース選定とパースが運用負担に。本ツールの「広く拾う」要件と合致しない。</li>
+    </ul>
+  </details>
+</div>
+
+<!-- ============================================ -->
+<h2>② 多角的比較表（実運用観点）</h2>
+<!-- ============================================ -->
+<div class="card">
+
+<div class="legend">
+  評価凡例:
+  <span class="legend-item"><span class="badge b-good">◎ 優秀</span></span>
+  <span class="legend-item"><span class="badge b-mid">○ 標準</span></span>
+  <span class="legend-item"><span class="badge b-bad">△ 要注意</span></span>
+  ／ スコア:
+  <span class="score score-A">A=最適</span>
+  <span class="score score-B">B=良</span>
+  <span class="score score-C">C=可</span>
+  <span class="score score-D">D=不向き</span>
+</div>
+
+<p style="font-size:13px; color:var(--c-muted);">※ 価格・無料枠は 2026年5月時点の公開情報に基づく。実装前に各公式ドキュメントで再確認すること。</p>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th>観点</th>
+      <th>① Brave</th>
+      <th>② Tavily</th>
+      <th>③ Google CSE</th>
+      <th>④ Bedrock Deep Research</th>
+      <th>⑤ Perplexity Sonar</th>
+      <th>⑥ Exa</th>
+      <th>⑦ SerpAPI</th>
+      <th>⑧ NewsAPI.org</th>
+      <th>⑨ Anthropic Web Search</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <tr>
+      <td><strong>無料枠</strong></td>
+      <td><span class="badge b-good">2,000q/月</span></td>
+      <td><span class="badge b-mid">1,000q/月</span></td>
+      <td><span class="badge b-mid">100q/日（3,000q/月）<br>※10kまで$5/1k</span></td>
+      <td><span class="badge b-bad">なし<br>従量のみ</span></td>
+      <td><span class="badge b-bad">$5 クレジット試用のみ</span></td>
+      <td><span class="badge b-mid">1,000q/月</span></td>
+      <td><span class="badge b-mid">100q/月</span></td>
+      <td><span class="badge b-bad">100q/日<br>※開発用途のみ</span></td>
+      <td><span class="badge b-bad">なし<br>従量のみ</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>本ツール想定（1,500q/月）の月額</strong></td>
+      <td><span class="badge b-good">無料</span></td>
+      <td><span class="badge b-good">無料<br>※上限25/起動</span></td>
+      <td><span class="badge b-good">無料<br>※上限100/起動</span></td>
+      <td><span class="badge b-mid">~$3<br>※Sonnet 4.6 中継時</span></td>
+      <td><span class="badge b-mid">~$7.5<br>$5/1000q</span></td>
+      <td><span class="badge b-good">無料<br>~月67%消費</span></td>
+      <td><span class="badge b-bad">$75<br>$75/5000q</span></td>
+      <td><span class="badge b-bad">本番$449/月<br>無料は開発のみ</span></td>
+      <td><span class="badge b-mid">$15<br>$10/1000q</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>日本語ニュース カバレッジ</strong></td>
+      <td><span class="badge b-mid">○ 独自インデックス、日経系は取得可</span></td>
+      <td><span class="badge b-good">◎ 日本語要約品質が高い</span></td>
+      <td><span class="badge b-good">◎ 世界最強</span></td>
+      <td><span class="badge b-good">◎ Brave/Tavily を内部で呼び出し可</span></td>
+      <td><span class="badge b-good">◎ 日本語ネイティブ対応</span></td>
+      <td><span class="badge b-mid">○ 英語強い、日本語は中程度</span></td>
+      <td><span class="badge b-good">◎ Google結果そのもの</span></td>
+      <td><span class="badge b-mid">○ 国内主要紙は対応</span></td>
+      <td><span class="badge b-mid">○ Brave内蔵</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>不動産専門ソースの取得</strong><br><span style="font-weight:normal;font-size:11px;color:var(--c-muted);">住宅新報・R.E.port・不動産経済研究所等</span></td>
+      <td><span class="badge b-mid">○ ドメイン指定で取得可</span></td>
+      <td><span class="badge b-mid">○ include_domains対応</span></td>
+      <td><span class="badge b-good">◎ siteRestrict / sort=date</span></td>
+      <td><span class="badge b-good">◎ プロンプトで指示可</span></td>
+      <td><span class="badge b-good">◎ search_domain_filter 対応</span></td>
+      <td><span class="badge b-mid">○ includeDomains 対応</span></td>
+      <td><span class="badge b-good">◎ Google同等</span></td>
+      <td><span class="badge b-mid">○ sources 指定</span></td>
+      <td><span class="badge b-mid">○ allowed_domains 対応</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>リアルタイム性</strong><br><span style="font-weight:normal;font-size:11px;color:var(--c-muted);">過去24h ニュースの取得</span></td>
+      <td><span class="badge b-good">◎ freshness=pd</span></td>
+      <td><span class="badge b-good">◎ days=1</span></td>
+      <td><span class="badge b-good">◎ dateRestrict=d1</span></td>
+      <td><span class="badge b-good">◎ 任意指示</span></td>
+      <td><span class="badge b-good">◎ search_recency_filter</span></td>
+      <td><span class="badge b-good">◎ startPublishedDate</span></td>
+      <td><span class="badge b-good">◎ tbs=qdr:d</span></td>
+      <td><span class="badge b-mid">○ from/to 指定</span></td>
+      <td><span class="badge b-mid">○ プロンプト依存</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>レスポンス形式</strong></td>
+      <td><span class="badge b-mid">URL+description（生）</span></td>
+      <td><span class="badge b-good">要約済みコンテンツ</span></td>
+      <td><span class="badge b-mid">URL+snippet（生）</span></td>
+      <td><span class="badge b-good">LLM最終回答</span></td>
+      <td><span class="badge b-good">引用付き完成回答</span></td>
+      <td><span class="badge b-good">本文 highlights 抽出可</span></td>
+      <td><span class="badge b-mid">構造化 JSON（生）</span></td>
+      <td><span class="badge b-mid">title+description（短い）</span></td>
+      <td><span class="badge b-good">引用付き完成回答</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>Lambda からの実装容易性</strong></td>
+      <td><span class="badge b-good">◎ HTTP 1リクエスト</span></td>
+      <td><span class="badge b-good">◎ HTTP 1リクエスト</span></td>
+      <td><span class="badge b-good">◎ HTTP 1リクエスト</span></td>
+      <td><span class="badge b-good">◎ boto3 のみ、IAMで完結</span></td>
+      <td><span class="badge b-good">◎ OpenAI互換</span></td>
+      <td><span class="badge b-good">◎ Python SDK あり</span></td>
+      <td><span class="badge b-good">◎ HTTP</span></td>
+      <td><span class="badge b-good">◎ HTTP</span></td>
+      <td><span class="badge b-good">◎ Bedrock経由なら追加実装ほぼゼロ</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>レイテンシ</strong></td>
+      <td><span class="badge b-good">300-600ms</span></td>
+      <td><span class="badge b-mid">1-2s（要約処理）</span></td>
+      <td><span class="badge b-good">200-400ms</span></td>
+      <td><span class="badge b-bad">10-60s（深い探索）</span></td>
+      <td><span class="badge b-mid">2-5s</span></td>
+      <td><span class="badge b-good">500ms-1s</span></td>
+      <td><span class="badge b-mid">1-3s</span></td>
+      <td><span class="badge b-good">300-500ms</span></td>
+      <td><span class="badge b-mid">2-5s/検索</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>申請容易性</strong></td>
+      <td><span class="badge b-mid">クレカ登録必須<br>（無料枠でも）</span></td>
+      <td><span class="badge b-good">メールのみ</span></td>
+      <td><span class="badge b-mid">GCP プロジェクト作成<br>+ 課金有効化</span></td>
+      <td><span class="badge b-good">既存AWSのみ</span></td>
+      <td><span class="badge b-mid">クレカ必須</span></td>
+      <td><span class="badge b-good">メールのみ</span></td>
+      <td><span class="badge b-mid">クレカ必須</span></td>
+      <td><span class="badge b-good">メールのみ</span></td>
+      <td><span class="badge b-good">既存AWS/Anthropic</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>利用規約リスク</strong></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-good">◎ AWS純正</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-bad">△ Googleスクレイピング法的グレー</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+      <td><span class="badge b-good">◎ 公式API</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>AWS Bedrock 親和性</strong></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-good">◎ ネイティブ</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-mid">○ Tool Use 経由</span></td>
+      <td><span class="badge b-good">◎ Anthropic API 直/Bedrock 経由</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>予算暴走リスク</strong></td>
+      <td><span class="badge b-good">◎ 無料枠ハード上限</span></td>
+      <td><span class="badge b-good">◎ 無料枠ハード上限</span></td>
+      <td><span class="badge b-good">◎ クォータ設定可</span></td>
+      <td><span class="badge b-bad">△ トークン消費が読みにくい</span></td>
+      <td><span class="badge b-mid">○ Sonar=固定、Pro=可変</span></td>
+      <td><span class="badge b-good">◎ クォータあり</span></td>
+      <td><span class="badge b-bad">△ 従量、上限設定要</span></td>
+      <td><span class="badge b-mid">○ プラン固定</span></td>
+      <td><span class="badge b-bad">△ トークン+検索の二重課金</span></td>
+    </tr>
+
+    <tr>
+      <td><strong>ベンダーロックイン</strong></td>
+      <td><span class="badge b-good">◎ 移行容易</span></td>
+      <td><span class="badge b-good">◎ 移行容易</span></td>
+      <td><span class="badge b-good">◎ 標準的</span></td>
+      <td><span class="badge b-bad">△ AWS強依存</span></td>
+      <td><span class="badge b-good">◎ OpenAI互換</span></td>
+      <td><span class="badge b-good">◎ シンプルAPI</span></td>
+      <td><span class="badge b-good">◎ Google結果なので移行容易</span></td>
+      <td><span class="badge b-good">◎ シンプル</span></td>
+      <td><span class="badge b-bad">△ Anthropic依存</span></td>
+    </tr>
+
+    <tr class="summary-row">
+      <td><strong>本ツール総合スコア</strong></td>
+      <td><span class="score score-A">A</span></td>
+      <td><span class="score score-A">A</span></td>
+      <td><span class="score score-B">B</span></td>
+      <td><span class="score score-C">C</span></td>
+      <td><span class="score score-B">B</span></td>
+      <td><span class="score score-B">B</span></td>
+      <td><span class="score score-D">D</span></td>
+      <td><span class="score score-D">D</span></td>
+      <td><span class="score score-B">B</span></td>
+    </tr>
+
+  </tbody>
+</table>
+</div>
+</div>
+
+<!-- ============================================ -->
+<h2>③ 各方式の特徴と本ツールでの位置づけ</h2>
+<!-- ============================================ -->
+<div class="card">
+
+<h3>① Brave Search API <span class="badge b-good">採用中</span></h3>
+<ul class="compact">
+  <li><strong>強み</strong>: 無料2000q/月で本ツール想定の月1500qを完全カバー。<code>/news/search</code> エンドポイントが NewsBox 相当の結果を返し、freshness=pd で過去24時間のフィルタが可能。独自インデックスのため Google ToS の影響を受けない。</li>
+  <li><strong>弱み</strong>: 申請時にクレジットカード登録が必須（無料枠でも）。返却される description が短い（200文字程度）ため、Bedrock 側で本文を再取得しないと要約品質が落ちる。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>無料運用の主軸として最適</strong>。現行実装の <code>PROVIDER_DEFAULT_CAPS</code> で 50/起動の上限制御済み。</li>
+</ul>
+
+<h3>② Tavily Search API <span class="badge b-good">代替済み</span></h3>
+<ul class="compact">
+  <li><strong>強み</strong>: LLMエージェント前提に設計され、<code>include_raw_content=true</code> で本文要約済みコンテンツが返却される。Bedrock の二段階呼び出し（検索→本文再取得）が不要になり、エージェントループが短縮される。日本語の要約品質が他の汎用検索より一段上。</li>
+  <li><strong>弱み</strong>: 無料1000q/月で本ツール想定の月1500qを下回るため、上限25/起動に抑える必要がある。リクエスト1回あたりのレイテンシが Brave の2-3倍。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>品質優先時の切替先</strong>。プロンプト改善で済む場合は Brave 据え置きで良いが、要約品質に不満が出たら切替候補。</li>
+</ul>
+
+<h3>③ Google Custom Search JSON API</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: 日本語ニュースサイトの網羅性は世界最強。<code>siteRestrict</code> で住宅新報・日経不動産等を直指定でき、<code>dateRestrict=d1</code> + <code>sort=date</code> で時系列ソート可能。</li>
+  <li><strong>弱み</strong>: 無料100q/日（=月3,000q）だが、1日に複数回テスト実行するとすぐ枯渇する。1,000q ごと $5 の従量課金は妥当だが、Google Programmable Search Engine 経由のため <strong>ニュース専用エンドポイントが存在しない</strong>（Google News API は2011年に廃止済み）。News Box 結果の構造化は SerpAPI に劣る。</li>
+  <li><strong>本ツールでの位置づけ</strong>: 単独採用は微妙。<strong>Brave/Tavily の補完として site:指定の専門ニュース検索</strong>に使うのが良い。</li>
+</ul>
+
+<h3>④ Bedrock + Claude Opus Deep Research（AgentCore Browse Tool）</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: AWS純正、IAM完結、追加API契約・キー管理不要。Bedrock AgentCore の Browse Tool（2025年GA）で Claude が自律的にブラウジング・検索ループを実行。Deep Research プロンプトを使えば1回の呼び出しで「複数ソースを横断調査→構造化レポート出力」まで完結する。</li>
+  <li><strong>弱み</strong>: Browse Tool は内部的に Bedrock が選定した Web 検索プロバイダ（Brave 等）を呼び出すため、結局裏で外部APIが動く。<strong>コスト構造が「Opusトークン + 内部検索」の二重課金</strong>で読みにくい。Deep Research モードは1回の探索で10-60秒、$0.5-2 程度かかり、5件のニュース取得には過剰スペック。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>過剰</strong>。本ツールは「決まったカテゴリで5件取得」というルーチン作業であり、Deep Research の自律探索能力は活かしきれない。月次レポートのような単発の深掘り調査向き。</li>
+</ul>
+
+<h3>⑤ Perplexity Sonar API</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: 引用付きの完成された回答を一発で取得できる。Sonar Pro は Deep Research と同等の探索深度を持ちつつ、料金体系が <strong>$5/1000リクエスト（固定）+ トークン課金</strong>で予算が読みやすい。日本語ネイティブ対応。</li>
+  <li><strong>弱み</strong>: Bedrock からの呼び出しは Tool Use 経由になるため、AWS純正の世界観から外れる。Sonar Pro の出力は「Perplexityの編集視点」を経由するため、ニュース原文へのこだわりがある場合は不向き。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>第3候補</strong>。Brave/Tavily で品質に行き詰まったら検討。</li>
+</ul>
+
+<h3>⑥ Exa (旧 Metaphor) API</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: 埋め込みベースのセマンティック検索により「リフォーム需要の高まりを示すニュース」のような<strong>意味検索</strong>が効く。<code>includeText</code> / <code>excludeText</code> でフィルタが柔軟。highlights で本文の関連部分のみ抽出可能。</li>
+  <li><strong>弱み</strong>: 日本語の埋め込み精度が英語より落ちる。Exa は「お宝記事を掘る」のは得意だが、「今日のメインストリームニュース」を拾うのは Brave/Google に劣る。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>PropTech・海外不動産カテゴリ専用の補助検索</strong>として混在採用が筋。</li>
+</ul>
+
+<h3>⑦ SerpAPI</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: Google検索結果の News Box / Top Stories を構造化JSONで取得できる。Google CSE では取れない「Google ニュース」タブ相当の結果が手に入る。</li>
+  <li><strong>弱み</strong>: 本質的に <strong>Google結果のスクレイピングプロキシ</strong>であり、Google ToS との関係がグレー。月100q無料はテスト用にすら足りず、本番運用は <strong>$75/月（5000q）</strong>からで本ツール予算（月3,000円目安）を圧迫する。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>不採用</strong>。コスト・規約リスクが見合わない。</li>
+</ul>
+
+<h3>⑧ NewsAPI.org</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: ニュース特化型の老舗、対応ソース150,000、日本のNHK・日経・朝日等もカバー。<code>sources</code> パラメータで配信元を絞り込める。</li>
+  <li><strong>弱み</strong>: 無料プランは <strong>開発用途のみ・本番運用禁止</strong>（ToS明記）。商用本番は最低 Business プラン <strong>$449/月</strong>。返却される description が極端に短く、本文取得には別途スクレイピングが必要。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>不採用</strong>。ToS違反のリスクと本番コストが見合わない。</li>
+</ul>
+
+<h3>⑨ Anthropic Web Search Tool（Claude API native）</h3>
+<ul class="compact">
+  <li><strong>強み</strong>: <code>{"type": "web_search_20250305"}</code> を tools に追加するだけで Claude が自律検索を実行。引用付きの完成回答が返り、Lambda 側の実装はほぼゼロ。allowed_domains / blocked_domains でドメイン制御も可能。</li>
+  <li><strong>弱み</strong>: <strong>Bedrock 経由では2026年5月時点で未対応</strong>（Anthropic直APIのみ）。本プロジェクトは Bedrock 採用のため、Anthropic API への切替が必要になり、IAM完結・データ主権の AWS 統合メリットを失う。料金は $10/1000検索 + トークン課金で、月1500検索なら約 $15+トークン代。</li>
+  <li><strong>本ツールでの位置づけ</strong>: <strong>条件付き有望</strong>。Bedrock 経由でサポートされた段階で再評価する価値あり（要ウォッチ）。</li>
+</ul>
+
+</div>
+
+<!-- ============================================ -->
+<h2>④ シナリオ別の最適解</h2>
+<!-- ============================================ -->
+<div class="card">
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>運用シナリオ</th><th>第1候補</th><th>第2候補</th><th>理由</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>現状維持（月コスト0円・既存実装）</td>
+      <td><strong>① Brave</strong></td>
+      <td>② Tavily</td>
+      <td>無料枠で月1500qを完全カバー。実装も既に存在。</td>
+    </tr>
+    <tr>
+      <td>要約品質を最優先</td>
+      <td><strong>② Tavily</strong></td>
+      <td>⑤ Perplexity Sonar</td>
+      <td>本文要約済みコンテンツが返るため Bedrock の二段呼び出し不要。</td>
+    </tr>
+    <tr>
+      <td>日本国内ニュースの網羅性最大化</td>
+      <td><strong>③ Google CSE</strong></td>
+      <td>① Brave</td>
+      <td>siteRestrict で住宅新報・日経不動産等を直指定可能。</td>
+    </tr>
+    <tr>
+      <td>AWS純正で完結したい</td>
+      <td><strong>④ Bedrock Deep Research</strong></td>
+      <td>⑨ Anthropic Web Search（Bedrock経由対応時）</td>
+      <td>外部APIキー管理が不要。ただし過剰スペック・コスト高。</td>
+    </tr>
+    <tr>
+      <td>意味検索で深掘り（PropTech等）</td>
+      <td><strong>⑥ Exa</strong></td>
+      <td>⑤ Perplexity Sonar</td>
+      <td>埋め込みベース検索で「兆候を示す記事」のような曖昧クエリに強い。</td>
+    </tr>
+    <tr>
+      <td>月コスト 1,000-3,000円許容で品質向上</td>
+      <td><strong>① Brave + ⑥ Exa 併用</strong></td>
+      <td>② Tavily 単独</td>
+      <td>主軸=Brave、PropTech/海外=Exa の役割分担で総コスト無料に近い。</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</div>
+
+<!-- ============================================ -->
+<h2>⑤ 最終推奨</h2>
+<!-- ============================================ -->
+
+<div class="recommend-card">
+  <h3>結論: <strong>現行の Brave Search API（フォールバック=Tavily）を維持</strong></h3>
+  <p style="margin-bottom: 12px;"><strong>根拠（3点）</strong></p>
+  <ol>
+    <li><strong>コスト</strong> ― 月1,500クエリは Brave 無料枠の75%に収まる。他の有料候補（Sonar $7.5/月、SerpAPI $75/月、NewsAPI $449/月）に乗り換える経済合理性がない。</li>
+    <li><strong>品質</strong> ― カチタスの不動産ニュース配信は「広く拾って Bedrock Opus 4.7 が選別」する設計のため、検索API側に高度な要約は不要。Tavily のような LLM特化型は <code>provider</code> 切替で即時試せる現行アーキテクチャが優れている。</li>
+    <li><strong>規約・運用安全性</strong> ― Brave/Tavily ともに公式API、ToS明確、ハード上限が存在する。SerpAPI のスクレイピング系・NewsAPI の本番利用制限のような潜在的リスクを抱えない。</li>
+  </ol>
+
+  <p style="margin-top:16px;margin-bottom: 8px;"><strong>将来の見直しトリガー</strong></p>
+  <ul class="compact">
+    <li>Bedrock 経由で <strong>Anthropic Web Search Tool</strong>(⑨) がGAされたら → 実装コードが大幅に削減できるため再評価。</li>
+    <li>住宅新報・R.E.port 等の <strong>専門メディア取得率が低下</strong>したら → Google CSE(③) の <code>siteRestrict</code> 補助検索を追加。</li>
+    <li>要約品質に <strong>恒常的な不満</strong>が出たら → Tavily(②) に <code>news-search-provider</code> Parameter Store で切替（無停止）。</li>
+    <li>月配信頻度が <strong>1日1回 → 1日3回以上</strong>に増えたら → 無料枠超過のため Brave Pro（$5/月 で 20,000q）または Tavily 有料プランに移行。</li>
+  </ul>
+</div>
+
+<div class="callout">
+  <strong>次アクション（任意）</strong>: 本比較結果を踏まえ、<code>docs/guides/news-search-provider.md</code> の「比較表」セクションを9方式版に拡張するか、本HTMLを <code>design/</code> 配下に昇格させる（実装決定の根拠ドキュメントとして）かは、運用判断に委ねる。
+</div>
+
+<footer>
+  AutoNewsDistributionTool ／ 比較ドキュメント ／ 2026-05-15 作成 ／ luo-xingyi@katitas.jp
+</footer>
+
+</div>
+</body>
+</html>

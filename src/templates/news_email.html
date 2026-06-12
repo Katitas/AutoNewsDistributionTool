@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="format-detection" content="telephone=no,address=no,email=no">
+    <meta name="x-apple-disable-message-reformatting" content="">
+    <title>{{ date }} カチタス Daily News</title>
+    <style>
+        body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+        body { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN",
+                         "Hiragino Sans", "Yu Gothic", "Meiryo", "Segoe UI", sans-serif;
+            background-color: #f5f1ea;
+            color: #2c3e50;
+            line-height: 1.7;
+        }
+
+        /* 長文要約のクランプ表示（モダンクライアントのみ。Outlook desktopは全文表示） */
+        .summary-clamp {
+            display: -webkit-box;
+            -webkit-line-clamp: 6;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        @media screen and (max-width: 600px) {
+            .container { width: 100% !important; max-width: 100% !important; }
+            .px-mobile { padding-left: 20px !important; padding-right: 20px !important; }
+            .py-mobile { padding-top: 24px !important; padding-bottom: 24px !important; }
+            .header-title { font-size: 24px !important; line-height: 1.3 !important; }
+            .header-date { font-size: 13px !important; }
+            .news-number { font-size: 14px !important; }
+            .news-title { font-size: 19px !important; line-height: 1.4 !important; }
+            .news-summary { font-size: 15px !important; line-height: 1.75 !important; }
+            .category-badge { font-size: 11px !important; padding: 4px 10px !important; }
+            .footer-text { font-size: 11px !important; }
+            .summary-clamp { -webkit-line-clamp: 8; }
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .bg-page { background-color: #1a1a1a !important; }
+        }
+    </style>
+</head>
+<body class="bg-page" style="margin:0; padding:0; background-color:#f5f1ea;">
+    <!-- Preheader (preview text in inbox) -->
+    <div style="display:none; font-size:1px; color:#f5f1ea; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
+        {{ date }}の主要ニュース{{ items|length }}件をお届けします
+    </div>
+
+    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f5f1ea;">
+        <tr>
+            <td align="center" style="padding: 24px 12px;">
+
+                <!-- Container -->
+                <table role="presentation" class="container" width="600" border="0" cellspacing="0" cellpadding="0" style="max-width:600px; width:100%; background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+
+                    <!-- ===== Header ===== -->
+                    <tr>
+                        <td class="px-mobile py-mobile" style="background: linear-gradient(135deg, #1a4d80 0%, #2c5f8d 100%); padding: 36px 40px 32px 40px;">
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td>
+                                        <p class="header-date" style="margin:0 0 8px 0; font-size:14px; color:#a8c5e0; letter-spacing:1.5px; text-transform:uppercase; font-weight:500;">
+                                            {{ date }} &middot; Daily Digest
+                                        </p>
+                                        <h1 class="header-title" style="margin:0; font-size:30px; line-height:1.2; color:#ffffff; font-weight:700; letter-spacing:-0.5px;">
+                                            本日の不動産ニュース
+                                        </h1>
+                                        <p style="margin:12px 0 0 0; font-size:14px; color:#cfe0f0; line-height:1.5;">
+                                            実需中古住宅事業に関連するトピック {{ items|length }} 件
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- ===== News Items ===== -->
+                    {% for item in items %}
+                    <tr>
+                        <td class="px-mobile" style="padding: {% if loop.first %}36px 40px 0 40px{% else %}24px 40px 0 40px{% endif %};">
+
+                            <!-- News card -->
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                                <!-- Category badge + number -->
+                                <tr>
+                                    <td style="padding-bottom:12px;">
+                                        <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="padding-right:10px;">
+                                                    <span class="category-badge" style="display:inline-block; padding:5px 12px; background-color:{{ category_colors.get(item.category, '#e8eef4') }}; color:{{ category_text_colors.get(item.category, '#1a4d80') }}; font-size:12px; font-weight:600; border-radius:14px; letter-spacing:0.3px;">
+                                                        {{ item.category }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="news-number" style="font-size:13px; color:#94a3b8; font-weight:500; letter-spacing:1px;">
+                                                        #{{ '%02d'|format(loop.index) }}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+
+                                <!-- Title -->
+                                <tr>
+                                    <td>
+                                        <h2 class="news-title" style="margin:0 0 12px 0; font-size:21px; line-height:1.4; color:#1a2733; font-weight:700; letter-spacing:-0.2px;">
+                                            {{ item.title }}
+                                        </h2>
+                                    </td>
+                                </tr>
+
+                                <!-- Summary（モダンクライアントでは6行にクランプ。Outlookは全文表示） -->
+                                <tr>
+                                    <td>
+                                        <p class="news-summary summary-clamp" style="margin:0 0 10px 0; font-size:15px; line-height:1.8; color:#475569;">
+                                            {{ item.summary }}
+                                        </p>
+                                    </td>
+                                </tr>
+
+                                <!-- Source URL link -->
+                                <tr>
+                                    <td style="padding-bottom:16px;">
+                                        <a href="{{ item.source_url }}" style="display:inline-block; font-size:13px; color:#1a4d80; text-decoration:none; font-weight:600; border-bottom:1px solid #1a4d80; padding-bottom:1px;" target="_blank" rel="noopener noreferrer">
+                                            📰 原文を読む →
+                                        </a>
+                                    </td>
+                                </tr>
+
+                                <!-- KATITAS relevance comment -->
+                                <tr>
+                                    <td>
+                                        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#fef9f3; border-left:3px solid #d4a04a; border-radius:4px;">
+                                            <tr>
+                                                <td style="padding:14px 18px;">
+                                                    <p style="margin:0 0 6px 0; font-size:11px; font-weight:700; color:#a07020; letter-spacing:1.2px; text-transform:uppercase;">
+                                                        💡 カチタス業務へのヒント
+                                                    </p>
+                                                    <p class="news-summary" style="margin:0; font-size:14px; line-height:1.75; color:#5a4a30;">
+                                                        {{ item.katitas_relevance }}
+                                                    </p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Divider (except after last item) -->
+                            {% if not loop.last %}
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td style="padding:28px 0 4px 0;">
+                                        <div style="height:1px; background-color:#e5e7eb; line-height:1px; font-size:1px;">&nbsp;</div>
+                                    </td>
+                                </tr>
+                            </table>
+                            {% endif %}
+
+                        </td>
+                    </tr>
+                    {% endfor %}
+
+                    <!-- ===== Closing message ===== -->
+                    <tr>
+                        <td class="px-mobile" style="padding: 36px 40px 32px 40px;">
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#fafaf7; border-radius:8px;">
+                                <tr>
+                                    <td style="padding: 20px 24px; text-align:center;">
+                                        <p style="margin:0; font-size:13px; color:#64748b; line-height:1.6;">
+                                            良い一日をお過ごしください。
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- ===== Footer ===== -->
+                    <tr>
+                        <td class="px-mobile" style="padding: 24px 40px 32px 40px; background-color:#1a2733;">
+                            <p class="footer-text" style="margin:0 0 6px 0; font-size:12px; color:#94a3b8; line-height:1.6; text-align:center;">
+                                カチタス Daily News &middot; Powered by Amazon Bedrock
+                            </p>
+                            <p class="footer-text" style="margin:0; font-size:11px; color:#64748b; line-height:1.6; text-align:center;">
+                                {{ date }} に自動配信
+                            </p>
+                        </td>
+                    </tr>
+
+                </table>
+                <!-- /Container -->
+
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

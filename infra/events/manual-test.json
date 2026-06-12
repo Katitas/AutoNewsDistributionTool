@@ -1,0 +1,5 @@
+{
+  "_comment": "手動テスト用ペイロード。CloudWatch Logs での識別子として _source を入れている。ハンドラーは event 内容を使わないため、フィールド追加は自由。",
+  "_source": "manual-test",
+  "_invokedAt": "2026-05-01T08:00:00+09:00"
+}

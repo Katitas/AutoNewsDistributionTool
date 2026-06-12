@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# SAM build artifacts
+.aws-sam/
+infra/.aws-sam/
+samconfig.local.toml
+
+# Lambda packaging artifacts (legacy)
+dist/
+build.zip
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets / local env
+.env
+.env.local
+*credentials*
+*.pem
+*.key
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml

@@ -1,0 +1,81 @@
+The Brave Search API is a REST API to query Brave Search and get back search results from the web in JSON format. Requests are highly extensible, and can be customized with a range of query parameters and headers.
+
+Visit the Brave Search API portal for the latest detailed documentation.
+
+Usage and limits
+$5 CPM (cost per thousand) / $0.005 per request
+Maximum of 50 requests per second
+Unlimited requests
+Search API features
+LLM Context
+Web search
+News search
+Video search
+Image search
+Extra alternate snippets for AI
+Schema-enriched Web results (Rich Web Search)
+Search Goggles
+Infobox
+Discussions
+Locations
+& more
+Endpoints
+https://api.search.brave.com/res/v1/llm/context
+https://api.search.brave.com/res/v1/web/search
+https://api.search.brave.com/res/v1/images/search
+https://api.search.brave.com/res/v1/videos/search
+https://api.search.brave.com/res/v1/news/search
+Getting started
+To get started immediately, try out a simple CURL request:
+
+curl -s --compressed "https://api.search.brave.com/res/v1/web/search?q=sundance+film+festival" \
+  -H "Accept: application/json" \
+  -H "Accept-Encoding: gzip" \
+  -H "X-Subscription-Token: <YOUR_API_KEY>"
+Example response
+Here's an example of a returned JSON object:
+
+{
+"query": {
+"original": "sundance film festival",
+"show_strict_warning": false,
+"is_navigational": true,
+"is_news_breaking": false,
+"spellcheck_off": true,
+"country": "us",
+"bad_results": false,
+"should_fallback": false,
+"postal_code": "",
+"city": "",
+"header_country": "",
+"more_results_available": true,
+"state": ""
+},
+
+"web": {
+"type": "search",
+"results": [
+{
+"title": "Sundance Film Festival",
+"url": "https://festival.sundance.org/",
+"is_source_local": false,
+"is_source_both": false,
+"description": "Join us for the 2026 <strong>Sundance</strong> <strong>Film</strong> <strong>Festival</strong> taking place from January 22–February 1, 2026 in Park City, Utah.",
+...
+For detailed information for supported query parameters, refer to the documentation for featured endpoints:
+
+Web Search
+Summarizer Search
+Image Search
+Video Search
+News Search
+Advanced Use Case
+Brave Goggles is an advanced tool to add with providing advanced filters for Brave Search results. It is currently supported in the following endpoints:
+
+Web Search
+News Search
+Brave Goggles Example
+curl -s --compressed "https://api.search.brave.com/res/v1/web/search?q=sundance+film+festival&goggles_id=https%3A%2F%2Fraw.githubusercontent.com%2Fallsides-news%2Fbrave-goggles%2Fmain%2Fleft.goggles" \
+  -H "Accept: application/json" \
+  -H "Accept-Encoding: gzip" \
+  -H "X-Subscription-Token: <YOUR_API_KEY>"

@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules\")",
+      "Bash(mkdir -p \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/execution-progress\")",
+      "Bash(cp \"C:/Users/luo-xingyi/.claude/plugins/cache/claude-basic-marketplace/claude-basic/0.1.1/templates/rules/doc-governance.md\" \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules/doc-governance.md\")",
+      "Bash(cp \"C:/Users/luo-xingyi/.claude/plugins/cache/claude-basic-marketplace/claude-basic/0.1.1/templates/rules/output-format.md\" \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules/output-format.md\")",
+      "Bash(cp \"C:/Users/luo-xingyi/.claude/plugins/cache/claude-basic-marketplace/claude-basic/0.1.1/templates/rules/session-management.md\" \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules/session-management.md\")",
+      "Bash(cp \"C:/Users/luo-xingyi/.claude/plugins/cache/claude-basic-marketplace/claude-basic/0.1.1/templates/rules/plan-to-execution.md\" \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules/plan-to-execution.md\")",
+      "Bash(cp \"C:/Users/luo-xingyi/.claude/plugins/cache/claude-basic-marketplace/claude-basic/0.1.1/templates/rules/execution-checklist.md\" \"C:/Users/luo-xingyi/Documents/repo/AutoNewsDistributionTool/.claude/rules/execution-checklist.md\")",
+      "Bash(python -m pip show moto)",
+      "Bash(python -m pip index versions moto)",
+      "Bash(python -m pip install -r requirements-dev.txt --upgrade)",
+      "Bash(python -m pytest)",
+      "Bash(python -m pip check)",
+      "Bash(python -m pip install -r requirements-dev.txt)",
+      "Bash(python -m pytest -x --tb=short)",
+      "Bash(python -m pytest tests/test_news_search.py -v --tb=short)",
+      "Bash(dir C:Usersluo-xingyiDocumentsrepoAutoNewsDistributionTooldocs *)",
+      "Bash(python -c \"import openpyxl; print\\('openpyxl ok'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(python _add_news_budget_sheets.py)",
+      "Bash(python -c \"import os; os.remove\\('_add_news_budget_sheets.py'\\); print\\('temp script removed'\\)\")",
+      "Bash(python -c \"import os; print\\('backup exists:', os.path.exists\\('2026年度_AWS予算見積もり_backup_20260528-092422.xlsx'\\)\\)\")",
+      "Bash(python _update_websearch_row.py)",
+      "Bash(python -c \"import os; os.remove\\('_update_websearch_row.py'\\); print\\('temp script removed'\\)\")",
+      "WebSearch",
+      "WebFetch(domain:aws.amazon.com)",
+      "WebFetch(domain:api-dashboard.search.brave.com)",
+      "Skill(claude-api)",
+      "Bash(python -m pytest tests/test_parameter_store.py -q)"
+    ]
+  }
+}

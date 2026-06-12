@@ -1,0 +1,264 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Auto News Distribution Tool — KATITAS 向け不動産ニュースを毎朝 8:00 JST に
+  Bedrock で生成し、SES / Slack でマルチチャネル配信する。
+
+# -------------------------------------------------------------------
+# Globals: Lambda 関数の共通設定（このスタックでは1関数のみだが将来拡張用）
+# -------------------------------------------------------------------
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [arm64]
+    MemorySize: 512
+    Timeout: 300
+    # SAM Globals.Function.Tags は Lambda 自体にのみ付く。
+    # スタック全体への伝播は samconfig.toml の `tags = "..."` で行う（CFn が全対応リソースへ自動伝播）。
+    Tags:
+      Project: !Ref ProjectTag
+      Environment: !Ref Environment
+      CostCenter: !Ref CostCenterTag
+      ManagedBy: SAM
+
+# -------------------------------------------------------------------
+# Parameters
+# -------------------------------------------------------------------
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [stg, prod]
+    Default: stg
+    Description: 環境識別子（Parameter Store パスやリソース名に使用）
+
+  AlertEmailAddress:
+    Type: String
+    Description: 送信失敗時のアラート通知先メールアドレス
+    AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+
+  SenderEmailAddress:
+    Type: String
+    Description: |
+      ニュース配信メールの送信元アドレス。
+      CFn が SES Email Identity を自動作成し、AWS から検証メールが送信される。
+      検証メールのリンクをクリックして Verified 状態にしないと送信できない。
+    AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
+
+  BedrockModelArn:
+    Type: String
+    Description: 使用する Bedrock モデル/Inference Profile ARN（IAM 制御用）
+    Default: arn:aws:bedrock:ap-northeast-1::foundation-model/*
+
+  ScheduleCronUtc:
+    Type: String
+    Default: 'cron(0 23 * * ? *)'
+    Description: EventBridge Scheduler の cron 式（UTC）。デフォルト=JST 08:00
+
+  ProjectTag:
+    Type: String
+    Default: AutoNewsDistribution
+    Description: コスト集計用 Project タグ。Cost Allocation Tag として有効化必須。
+
+  CostCenterTag:
+    Type: String
+    Default: katitas-it-newsfeed
+    Description: コスト集計用 CostCenter タグ。組織標準に合わせて override 可能。
+
+# -------------------------------------------------------------------
+# Resources
+# -------------------------------------------------------------------
+Resources:
+
+  # ============ Lambda Function (SAM) ============
+  DistributeNewsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub auto-news-distribute-${Environment}
+      Description: KATITAS 向け不動産ニュースを Bedrock で生成し SES/Slack に配信
+      CodeUri: ../
+      Handler: src.handlers.distribute_news.lambda_handler
+      Environment:
+        Variables:
+          PARAMETER_PATH: !Sub /kati/auto_news_distribute/${Environment}
+          LOG_LEVEL: INFO
+      LoggingConfig:
+        LogGroup: !Ref LambdaLogGroup
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Sid: ParameterStoreRead
+              Effect: Allow
+              Action:
+                - ssm:GetParametersByPath
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/kati/auto_news_distribute/${Environment}/*
+            - Sid: ParameterStoreDecrypt
+              Effect: Allow
+              Action: kms:Decrypt
+              Resource: '*'
+              Condition:
+                StringEquals:
+                  kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+            - Sid: BedrockInvoke
+              Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:Converse
+              Resource: !Ref BedrockModelArn
+            - Sid: SESSend
+              Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              # 送信元 identity と全送信先（メール送信は宛先ARNを持たない）の組合せに限定。
+              # FromEmailAddress 制限により、本 Lambda は SenderEmailAddress 以外を From に使えない。
+              Resource:
+                - !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmailAddress}
+              Condition:
+                StringEquals:
+                  ses:FromAddress: !Ref SenderEmailAddress
+      Events:
+        DailySchedule:
+          Type: ScheduleV2
+          Properties:
+            Name: !Sub auto-news-daily-${Environment}
+            Description: 毎朝 8:00 JST にニュース配信 Lambda を起動
+            ScheduleExpression: !Ref ScheduleCronUtc
+            ScheduleExpressionTimezone: UTC
+            FlexibleTimeWindow:
+              Mode: 'OFF'
+            State: ENABLED
+            RetryPolicy:
+              MaximumRetryAttempts: 5
+              MaximumEventAgeInSeconds: 21600
+            DeadLetterConfig:
+              Arn: !GetAtt ScheduleDLQ.Arn
+    Metadata:
+      BuildMethod: python3.12
+      BuildProperties:
+        Manifest: requirements.txt
+
+  # ============ SES Email Identity ============
+  # 配信メール送信元アドレスを SES に登録する。
+  # デプロイ後、AWS から SenderEmailAddress に検証メールが届く → リンククリックで Verified に。
+  # 検証完了までは ses:SendEmail が MessageRejected エラーになる。
+  SenderEmailIdentity:
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref SenderEmailAddress
+      # ConfigurationSetName, DkimAttributes, MailFromAttributes 等は将来追加可。
+      # Tag は EmailIdentity リソースが Tags 未対応のため省略（CloudTrail と Stack で追跡）。
+
+  # ============ Logs ============
+  LambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/auto-news-distribute-${Environment}
+      RetentionInDays: 90
+      Tags:
+        - { Key: Project, Value: !Ref ProjectTag }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+        - { Key: ManagedBy, Value: SAM }
+
+  # ============ DLQ for Scheduler retries exceeded ============
+  ScheduleDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub auto-news-schedule-dlq-${Environment}
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - { Key: Project, Value: !Ref ProjectTag }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+        - { Key: ManagedBy, Value: SAM }
+
+  # ============ Alerting ============
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub auto-news-alerts-${Environment}
+      DisplayName: Auto News Distribution Alerts
+      Tags:
+        - { Key: Project, Value: !Ref ProjectTag }
+        - { Key: Environment, Value: !Ref Environment }
+        - { Key: CostCenter, Value: !Ref CostCenterTag }
+        - { Key: ManagedBy, Value: SAM }
+
+  AlertSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmailAddress
+
+  LambdaErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub auto-news-lambda-errors-${Environment}
+      AlarmDescription: Lambda 関数でエラーが発生したとき通知
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DistributeNewsFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+  ScheduleDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub auto-news-schedule-dlq-${Environment}
+      AlarmDescription: EventBridge Scheduler が 5 回リトライしても失敗したときに通知
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt ScheduleDLQ.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlertTopic
+
+# -------------------------------------------------------------------
+# Outputs
+# -------------------------------------------------------------------
+Outputs:
+  LambdaFunctionName:
+    Description: Lambda 関数名（手動トリガー用）
+    Value: !Ref DistributeNewsFunction
+    Export:
+      Name: !Sub ${AWS::StackName}-LambdaName
+
+  LambdaFunctionArn:
+    Value: !GetAtt DistributeNewsFunction.Arn
+
+  AlertTopicArn:
+    Description: アラート通知用 SNS Topic ARN
+    Value: !Ref AlertTopic
+
+  ScheduleDLQUrl:
+    Description: スケジュール失敗時の DLQ URL
+    Value: !Ref ScheduleDLQ
+
+  ParameterStorePath:
+    Description: アプリ設定の Parameter Store パス
+    Value: !Sub /kati/auto_news_distribute/${Environment}
+
+  SenderEmailIdentityArn:
+    Description: |
+      SES Email Identity の ARN。
+      検証状態は AWS Console > SES > Verified identities または `aws sesv2 get-email-identity --email-identity ${SenderEmailAddress}` で確認。
+    Value: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmailAddress}
