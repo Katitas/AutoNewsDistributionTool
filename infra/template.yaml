@@ -13,7 +13,10 @@ Globals:
     Runtime: python3.13
     Architectures: [arm64]
     MemorySize: 512
-    Timeout: 300
+    # 30件化でエージェントループ（検索20〜25ターン＋submit生成~11Kトークン）が
+    # 逐次実行され壁時計時間が300秒を超過しタイムアウトしたため900秒（CFn最大）へ拡張。
+    # boto3 read_timeout（bedrock_client.py）と必ずセットで運用すること。
+    Timeout: 900
     # SAM Globals.Function.Tags は Lambda 自体にのみ付く。
     # スタック全体への伝播は samconfig.toml の `tags = "..."` で行う（CFn が全対応リソースへ自動伝播）。
     Tags:

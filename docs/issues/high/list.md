@@ -8,6 +8,21 @@
   - 规避方法: 接收者「右键复制链接」后在浏览器打开，而非直接点击；或从邮件（SES HTML）端打开
   - 备注: 若日后改主意，`src/services/url_normalizer.py` 的 `_HOST_REWRITES`（#15a）可作为后端缓解基础设施（如赌「裸域 `nikkei.com` 重定向才是小写化环节」，加 `"nikkei.com": "www.nikkei.com"`）
 
+## ✅ 已解决（2026-06-23）
+
+- [x] **#16** prod Lambda 调用超时 `Sandbox.Timedout: Task timed out after 300.00 seconds`
+  - 现象: prod 手动 invoke → 300 秒后被 Lambda runtime 强制 kill（错误 `errorType: Sandbox.Timedout`）
+  - 根因: 每日新闻数 5 → 30 后，agentic loop（`bedrock_client.py:run_news_agent`）**完全逐次执行**，检索 20〜25 ターン（每ターン Converse 5〜15s + 检索 API 1〜3s）+ submit 生成 ~11K tokens，壁时计时间超过 `template.yaml` 的 `Timeout: 300`
+  - 次因（联动）: boto3 client 未设 `read_timeout`（botocore 默认 60s），即使 Lambda 上限拉高，单次长 Converse 仍会在 60s 被中断 → 必须与 Lambda Timeout 同时调整
+  - 解决:
+    - `infra/template.yaml`: `Globals.Function.Timeout` 300 → **900**（CFn 最大值）
+    - `src/services/bedrock_client.py`: boto3 `Config` 增加 `connect_timeout=10, read_timeout=870`，`retries.max_attempts` 3 → **2**（长 Converse 重试会二重消耗壁时计时间）
+  - 影响文件: `infra/template.yaml`, `src/services/bedrock_client.py`
+  - 测试: 78 passed（既存断言不涉及 timeout，无回归）
+  - ⚠️ **需重新部署 prod（IaC + 代码变更）**: `cd infra && sam build && sam deploy --config-env prod`
+  - ⚠️ 部署后须更新 `.claude/rules/infra-environment.md` 的 Lambda Timeout（现记载 300s 前提）→ 900s
+  - 备注（未做的进一步优化，留作 backlog）: ③ 收紧 `_MAX_AGENT_TURNS` / 检索枠以压低壁时计上振；或将 submit 改为按分类分批 / ConverseStream 流式以规避单次长生成
+
 ## ✅ 已确认无需改动
 
 - [x] **#2-confirm** Parameter Store「取全量数据是否有必要」

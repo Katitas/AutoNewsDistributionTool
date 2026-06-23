@@ -304,10 +304,17 @@ def run_news_agent(
     logger.info(
         "agent start: provider=%s, searches_max=%d", active_provider, searches_max
     )
+    # read_timeout は botocore 既定 60 秒。30件の submit 生成は数分かかり 60 秒を
+    # 超えるため、明示的に Lambda Timeout（900秒）に収まる範囲へ拡張する。
+    # 長時間の Converse をリトライすると壁時計時間を二重消費するため max_attempts は 2 に抑える。
     client = boto3.client(
         "bedrock-runtime",
         region_name=region_name,
-        config=Config(retries={"max_attempts": 3, "mode": "standard"}),
+        config=Config(
+            connect_timeout=10,
+            read_timeout=870,
+            retries={"max_attempts": 2, "mode": "standard"},
+        ),
     )
     tool_config = _build_tool_config()
 
