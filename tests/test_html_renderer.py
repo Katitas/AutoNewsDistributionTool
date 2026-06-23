@@ -1,4 +1,4 @@
-from src.models.news import NewsDigest
+from src.models.news import TOTAL_ITEMS, NewsDigest
 from src.services.html_renderer import (
     CATEGORY_COLORS,
     CATEGORY_TEXT_COLORS,
@@ -10,7 +10,7 @@ class TestRenderNewsEmail:
     def test_contains_date_and_count(self, sample_digest: NewsDigest) -> None:
         html = render_news_email(digest=sample_digest, date="2026-05-01")
         assert "2026-05-01" in html
-        assert "5" in html  # items count
+        assert str(TOTAL_ITEMS) in html  # items count（計30件）
 
     def test_contains_all_titles(self, sample_digest: NewsDigest) -> None:
         html = render_news_email(digest=sample_digest, date="2026-05-01")
@@ -35,19 +35,10 @@ class TestRenderNewsEmail:
             assert CATEGORY_TEXT_COLORS[category] in html
 
     def test_html_escapes_dangerous_input(self) -> None:
-        from src.models.news import NewsDigest, NewsItem
+        from tests.factories import make_digest
 
-        items = [
-            NewsItem(
-                title="<script>alert(1)</script>",
-                summary="あ" * 250,
-                category="PropTech",
-                katitas_relevance="業務に役立つ。" * 6,
-                source_url="https://example.com/x",
-            )
-            for _ in range(5)
-        ]
-        digest = NewsDigest(items=items)
+        # 全件のタイトルに XSS ペイロードを仕込んだ完全な digest（計30件・全カテゴリ均衡）。
+        digest = make_digest(title="<script>alert(1)</script>")
         html = render_news_email(digest=digest, date="2026-05-01")
         assert "<script>alert(1)</script>" not in html
         assert "&lt;script&gt;" in html

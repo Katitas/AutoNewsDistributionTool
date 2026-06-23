@@ -32,7 +32,8 @@
       "Bash(python -m pytest -q)",
       "Bash(sam validate *)",
       "Bash(python *)",
-      "PowerShell(sam validate *)"
+      "PowerShell(sam validate *)",
+      "Bash(grep -iA8 \"pytest\\\\|testpath\\\\|pythonpath\")"
     ]
   }
 }

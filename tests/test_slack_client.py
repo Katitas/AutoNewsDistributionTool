@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.models.news import NewsDigest
+from src.models.news import CATEGORIES, ITEMS_PER_CATEGORY, NewsDigest
 from src.services import slack_client
 from src.services.slack_client import (
     SlackSendError,
@@ -40,10 +40,10 @@ class TestGroupByCategory:
 
     def test_groups_preserve_order(self, sample_digest: NewsDigest) -> None:
         grouped = _group_by_category(sample_digest)
-        assert list(grouped.keys()) == ["PropTech", "法規制・政策", "マーケット・価格動向"]
-        assert len(grouped["PropTech"]) == 2
-        assert len(grouped["法規制・政策"]) == 2
-        assert len(grouped["マーケット・価格動向"]) == 1
+        # sample_digest は CATEGORIES 順に各カテゴリ ITEMS_PER_CATEGORY 件で構成される。
+        assert list(grouped.keys()) == list(CATEGORIES)
+        for category in CATEGORIES:
+            assert len(grouped[category]) == ITEMS_PER_CATEGORY
 
 
 class TestBuildBlocks:
@@ -81,8 +81,9 @@ class TestSendNewsByCategory:
 
         sent = send_news_by_category(webhook_url=WEBHOOK, digest=sample_digest, date="2026-05-01")
 
-        assert sent == 3  # PropTech, 法規制, マーケット
-        assert mock_urlopen.call_count == 3
+        # 全カテゴリ分（6カテゴリ）= 6メッセージ
+        assert sent == len(CATEGORIES)
+        assert mock_urlopen.call_count == len(CATEGORIES)
 
     def test_payload_is_valid_json(self, mocker, sample_digest: NewsDigest) -> None:
         captured: list[bytes] = []

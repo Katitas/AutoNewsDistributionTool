@@ -3,7 +3,7 @@
 Bedrock 自身が以下のループを回す:
     1. プロンプト + 本日の日付を受け取る
     2. キーワードを決定し `search_real_news` ツールを呼ぶ
-    3. 検索結果を読んで適切な5件を選定
+    3. 検索結果を読んで全カテゴリ各5件（計30件）を選定
     4. `submit_news_digest` ツールに構造化結果を渡して終了
 
 Lambda 内では本ファイルの `run_news_agent()` を呼ぶだけで、
@@ -23,7 +23,12 @@ import boto3
 from botocore.config import Config
 from pydantic import ValidationError
 
-from src.models.news import NewsDigest
+from src.models.news import (
+    CATEGORIES,
+    ITEMS_PER_CATEGORY,
+    TOTAL_ITEMS,
+    NewsDigest,
+)
 from src.services.news_search import (
     PROVIDER_DEFAULT_CAPS,
     NewsSearchError,
@@ -35,7 +40,8 @@ logger = logging.getLogger(__name__)
 
 SUBMIT_TOOL_NAME = "submit_news_digest"
 SUBMIT_TOOL_DESCRIPTION = (
-    "本日のニュースダイジェストを5件、構造化データとして送信する。"
+    f"本日のニュースダイジェストを全{len(CATEGORIES)}カテゴリ各{ITEMS_PER_CATEGORY}件・計{TOTAL_ITEMS}件、"
+    "構造化データとして送信する。"
     "search_real_news で十分な裏取りを行った後、最後にこのツールを必ず呼び出して終了すること。"
     "プレーンテキストでの応答は禁止。"
 )
@@ -43,14 +49,16 @@ SUBMIT_TOOL_DESCRIPTION = (
 SEARCH_TOOL_NAME = "search_real_news"
 SEARCH_TOOL_DESCRIPTION = (
     "実際のWebニュース記事を検索する。日本語キーワードで実在する記事のtitle/url/snippetを取得できる。"
-    "本日のニュースを5件選ぶ前に、必ずこのツールを複数回呼び出して候補記事の裏取りを行うこと。"
+    f"本日のニュース計{TOTAL_ITEMS}件（各カテゴリ{ITEMS_PER_CATEGORY}件）を選ぶ前に、"
+    "必ずこのツールを複数回呼び出して候補記事の裏取りを行うこと。"
     "URL を捏造するのではなく、このツールが返した URL のみを submit_news_digest の source_url に使うこと。"
     "1回の起動で呼び出せる回数には上限あり。上限到達時はその時点までの結果で submit_news_digest を呼び終了すること。"
 )
 
 # Tool Use ループの最大ターン数（無限ループ防止）。
-# 想定: 検索 5〜8回 + 最終 submit 1回 = 6〜9 ターン。10ターンで打ち止め。
-_MAX_AGENT_TURNS = 12
+# 全カテゴリ各5件＝30件を集めるには各カテゴリで複数回検索が要るため、
+# 想定: 検索 15〜25回 + 最終 submit 1回。余裕を見て 30 ターンで打ち止め。
+_MAX_AGENT_TURNS = 30
 
 # 1 Lambda invocation あたりの search_real_news 呼び出し上限。
 # プロバイダごとのデフォルトは src/services/news_search.py:PROVIDER_DEFAULT_CAPS で管理。
@@ -314,17 +322,20 @@ def run_news_agent(
                 f"本起動では {SEARCH_TOOL_NAME} を **最大 {searches_max} 回** まで呼び出せます。"
                 f"これは Web 検索 API（{active_provider}）の月間無料枠を保護するための制約です。"
                 f"上限を超えた呼び出しは検索結果が空で返るため、計画的に使ってください。\n"
-                f"推奨配分: 5〜10 キーワードに対し、各 3〜5 回程度で計 {min(searches_max, 30)} 回前後。"
+                f"推奨配分: {len(CATEGORIES)} カテゴリ × 各 3〜5 回程度で計 {min(searches_max, 30)} 回前後。"
                 f"各 toolResult に `searches_remaining` フィールドが含まれるので、"
                 f"残り回数を見ながら戦略を調整してください。\n\n"
                 f"## 作業フロー\n"
                 f"1. 必ず {SEARCH_TOOL_NAME} を複数回呼んで実在記事の裏取りを行う\n"
-                f"2. 取得した記事から本日のニュース 5 件を選定\n"
+                f"2. 取得した記事から、以下 {len(CATEGORIES)} カテゴリ各 {ITEMS_PER_CATEGORY} 件・計 {TOTAL_ITEMS} 件を選定\n"
+                f"   対象カテゴリ: {' / '.join(CATEGORIES)}\n"
+                f"   ※ 各カテゴリちょうど {ITEMS_PER_CATEGORY} 件でないと検証エラーになり再提出が必要。\n"
                 f"3. 最後に {SUBMIT_TOOL_NAME} を 1 回呼んで終了する\n\n"
                 f"## 厳守事項\n"
                 f"URL は捏造禁止。{SEARCH_TOOL_NAME} が返した url のみ source_url に使うこと。"
                 f"検索予算が尽きた場合（budget_exhausted=true が返ったら）、"
-                f"その時点までの検索結果から 5 件選び、{SUBMIT_TOOL_NAME} を呼んで正常終了してください。"
+                f"その時点までの検索結果から各カテゴリ {ITEMS_PER_CATEGORY} 件（計 {TOTAL_ITEMS} 件）を選び、"
+                f"{SUBMIT_TOOL_NAME} を呼んで正常終了してください。"
             )
         }
     ]
@@ -344,7 +355,10 @@ def run_news_agent(
             toolConfig=tool_config,
             # temperature は Claude Opus 4.8 以降で deprecated（指定すると
             # ValidationException）。モデル側の既定に委ね、maxTokens のみ指定する。
-            inferenceConfig={"maxTokens": 4096},
+            # 30件 ×（summary 最大800字 + relevance 最大300字 + JSON overhead）は
+            # 4096 tokens では確実に溢れて出力が途中で切れ submit が壊れるため、
+            # 件数増に合わせて大幅に引き上げる。
+            inferenceConfig={"maxTokens": 32000},
         )
 
         last_stop_reason = response.get("stopReason")

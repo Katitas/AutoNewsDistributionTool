@@ -50,7 +50,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
 
     処理フロー:
         1. Parameter Store から設定取得
-        2. Bedrock で本日のニュース5件を取得
+        2. Bedrock で本日のニュース計30件（全6カテゴリ各5件）を取得
         3. email_enabled なら SES 送信、slack_enabled なら Slack 送信
         4. 失敗時は例外を上げ、Scheduler のリトライ→DLQ→アラートに連鎖させる
 

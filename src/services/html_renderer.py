@@ -44,7 +44,7 @@ def render_news_email(*, digest: NewsDigest, date: str) -> str:
     """Jinja2 で HTML メール本文をレンダリングする。
 
     Args:
-        digest: NewsDigest（5件のニュース）。
+        digest: NewsDigest（全6カテゴリ各5件・計30件のニュース）。
         date: 配信対象日（YYYY-MM-DD）。HTML タイトルとヘッダに表示。
 
     Returns:

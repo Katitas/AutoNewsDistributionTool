@@ -1,6 +1,7 @@
-from typing import Literal
+from collections import Counter
+from typing import Literal, get_args
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 NewsCategory = Literal[
@@ -11,6 +12,13 @@ NewsCategory = Literal[
     "海外不動産",
     "リフォーム関連",
 ]
+
+# 1カテゴリあたりの配信件数。全カテゴリ均等に ITEMS_PER_CATEGORY 件ずつ選ぶ。
+ITEMS_PER_CATEGORY = 5
+# 対象カテゴリ一覧（NewsCategory Literal から動的取得。分類の増減はここに追従する）。
+CATEGORIES: tuple[str, ...] = get_args(NewsCategory)
+# 1日あたりの総件数 = カテゴリ数 × 各カテゴリ件数（現状 6 × 5 = 30）。
+TOTAL_ITEMS = ITEMS_PER_CATEGORY * len(CATEGORIES)
 
 
 class NewsItem(BaseModel):
@@ -57,7 +65,32 @@ class NewsItem(BaseModel):
 class NewsDigest(BaseModel):
     items: list[NewsItem] = Field(
         ...,
-        min_length=5,
-        max_length=5,
-        description="本日の不動産ニュース。実需中古住宅事業に関連するもの5件。マンション・投資用は除外。",
+        min_length=TOTAL_ITEMS,
+        max_length=TOTAL_ITEMS,
+        description=(
+            f"本日の不動産ニュース。実需中古住宅事業に関連するもの、"
+            f"全{len(CATEGORIES)}カテゴリ各{ITEMS_PER_CATEGORY}件ずつ計{TOTAL_ITEMS}件。"
+            f"マンション・投資用は除外。"
+        ),
     )
+
+    @model_validator(mode="after")
+    def _validate_per_category_balance(self) -> "NewsDigest":
+        """各カテゴリがちょうど ITEMS_PER_CATEGORY 件であることを強制する。
+
+        Field の min/max_length は総件数しか縛れないため、カテゴリ偏り
+        （例: 30件すべて PropTech）を防ぐにはモデルレベルの検証が必要。
+        違反時は ValueError を送出し、Bedrock 側に submit のやり直しを促す。
+        """
+        counts = Counter(item.category for item in self.items)
+        unbalanced = {
+            category: counts.get(category, 0)
+            for category in CATEGORIES
+            if counts.get(category, 0) != ITEMS_PER_CATEGORY
+        }
+        if unbalanced:
+            raise ValueError(
+                f"各カテゴリちょうど {ITEMS_PER_CATEGORY} 件が必須（{len(CATEGORIES)}カテゴリ計 {TOTAL_ITEMS} 件）。"
+                f"件数が不正なカテゴリ: {unbalanced}"
+            )
+        return self

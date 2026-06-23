@@ -10,22 +10,15 @@ from src.services.bedrock_client import (
     _resolve_max_searches,
     fetch_news_digest,
 )
+from src.models.news import TOTAL_ITEMS
 from src.services.news_search import PROVIDER_DEFAULT_CAPS
+from tests.factories import make_balanced_items
 
 
 def _valid_tool_input() -> dict:
-    """NewsDigest スキーマを満たす最小の正常入力を返す（5件・全フィールド充足）。"""
+    """NewsDigest スキーマを満たす正常入力を返す（全カテゴリ各5件・計30件、全フィールド充足）。"""
     return {
-        "items": [
-            {
-                "title": f"テストニュース #{i}",
-                "summary": "あ" * 250,
-                "category": "PropTech",
-                "katitas_relevance": "業務に役立つ示唆。" * 5,
-                "source_url": f"https://example.com/article/{i}",
-            }
-            for i in range(5)
-        ]
+        "items": [item.model_dump() for item in make_balanced_items(title_prefix="テストニュース")]
     }
 
 
@@ -143,7 +136,7 @@ class TestFetchNewsDigest:
         mocker.patch.object(bedrock_client.boto3, "client", return_value=mock_client)
 
         digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
-        assert len(digest.items) == 5
+        assert len(digest.items) == TOTAL_ITEMS
 
     def test_no_tool_use_block_raises(self, mocker) -> None:
         """ツール呼び出しが一切ないプレーンテキスト応答は想定外として例外。"""
@@ -268,7 +261,7 @@ class TestFetchNewsDigest:
             max_searches_per_invocation=1,  # 上限1で即座に枯渇させる
         )
 
-        assert len(digest.items) == 5
+        assert len(digest.items) == TOTAL_ITEMS
         # Tavily は1回だけ叩かれた（上限1）。2回目の search は API を叩いていない
         assert search_spy.call_count == 1
 
@@ -306,6 +299,6 @@ class TestFetchNewsDigest:
         )
 
         digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
-        assert len(digest.items) == 5
+        assert len(digest.items) == TOTAL_ITEMS
         # 2ターン分 converse が呼ばれていること
         assert mock_client.converse.call_count == 2

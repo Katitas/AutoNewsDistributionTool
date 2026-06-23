@@ -175,7 +175,7 @@ def send_news_by_category(*, webhook_url: str, digest: NewsDigest, date: str) ->
 
     Args:
         webhook_url: Slack Incoming Webhook URL。
-        digest: Bedrock から取得した NewsDigest（5件）。
+        digest: Bedrock から取得した NewsDigest（全6カテゴリ各5件・計30件）。
         date: 配信対象日（YYYY-MM-DD）。
 
     Returns:

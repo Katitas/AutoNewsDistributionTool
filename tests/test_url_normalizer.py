@@ -1,21 +1,14 @@
-from src.models.news import NewsDigest, NewsItem
+from src.models.news import NewsDigest
 from src.services.url_normalizer import apply_url_rewrites, normalize_url
-
-
-def _item(source_url: str, *, title: str = "テスト見出し") -> NewsItem:
-    """検証用の最小 NewsItem（各フィールドの min_length 制約を満たす）。"""
-    return NewsItem(
-        title=title,
-        summary="あ" * 250,
-        category="PropTech",
-        katitas_relevance="カチタス業務に役立つ可能性があるテスト用コメント本文。" * 2,
-        source_url=source_url,
-    )
+from tests.factories import make_digest
 
 
 def _digest(urls: list[str]) -> NewsDigest:
-    """URL を差し替えた 5 件の NewsDigest を作る（min/max=5 制約のため必ず 5 件）。"""
-    return NewsDigest(items=[_item(u, title=f"ニュース {i}") for i, u in enumerate(urls)])
+    """先頭から urls を割り当てた完全な NewsDigest（計30件・全カテゴリ均衡）を作る。
+
+    urls の不足分は書き換え対象外の example.com URL で補完される。
+    """
+    return make_digest(source_urls=urls)
 
 
 class TestNormalizeUrl:
@@ -53,22 +46,20 @@ class TestApplyUrlRewrites:
             [
                 "https://housenews.jp/a/1",
                 "https://example.com/news/p2",
-                "https://example.com/news/l1",
-                "https://example.com/news/l2",
-                "https://example.com/news/m1",
             ]
         )
         result = apply_url_rewrites(digest)
 
+        # 先頭（housenews）のみ www 補正。2件目以降は書き換え対象外なので不変。
         assert result.items[0].source_url == "https://www.housenews.jp/a/1"
-        assert [i.source_url for i in result.items[1:]] == [
-            "https://example.com/news/p2",
-            "https://example.com/news/l1",
-            "https://example.com/news/l2",
-            "https://example.com/news/m1",
-        ]
+        assert result.items[1].source_url == "https://example.com/news/p2"
+        assert all(
+            "housenews.jp" not in item.source_url or item.source_url.startswith("https://www.")
+            for item in result.items
+        )
 
     def test_no_change_returns_same_instance(self) -> None:
         """書き換え対象が無ければ同一インスタンスをそのまま返す。"""
-        digest = _digest([f"https://example.com/news/{i}" for i in range(5)])
+        # source_urls 未指定 → 全件 example.com（書き換え対象なし）。
+        digest = _digest([])
         assert apply_url_rewrites(digest) is digest
