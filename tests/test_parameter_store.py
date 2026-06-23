@@ -50,7 +50,7 @@ class TestLoadConfig:
         assert config.prompt.startswith("あなたは")
         assert config.recipient_emails == ["a@example.com", "b@example.com"]
         assert config.sender_email == "news@example.com"
-        assert config.slack_webhook_url.startswith("https://hooks.slack.com/")
+        assert config.slack_webhook_urls == ["https://hooks.slack.com/services/T/B/X"]
         assert config.email_enabled is True
         assert config.slack_enabled is True
         assert config.news_search_provider == "brave"
@@ -84,6 +84,26 @@ class TestLoadConfig:
         assert config.email_enabled is False
         assert config.slack_enabled is True
         assert config.recipient_emails == []
+        assert config.slack_webhook_urls == ["https://hooks.slack.com/services/X"]
+
+    def test_multiple_slack_webhooks_split(self) -> None:
+        """slack-webhook-url はカンマ / セミコロン区切りで複数 URL にパースされる。"""
+        client = self._client()
+        _put_required_minimum(client)
+        _put(
+            client,
+            "slack-webhook-url",
+            "https://hooks.slack.com/A, https://hooks.slack.com/B; https://hooks.slack.com/C",
+            secure=True,
+        )
+
+        config = load_config(PATH)
+        assert config.slack_webhook_urls == [
+            "https://hooks.slack.com/A",
+            "https://hooks.slack.com/B",
+            "https://hooks.slack.com/C",
+        ]
+        assert config.slack_enabled is True
 
     def test_both_channels_empty_raises(self) -> None:
         client = self._client()

@@ -40,7 +40,7 @@
         ↓                                                │
    ├─ retry x5 / DLQ ──────────────► [SQS DLQ] ─► [CloudWatch Alarm]
         ↓
-[Lambda: auto-news-distribute-{env}]  (Python 3.12 / arm64 / 512MB / 300s)
+[Lambda: auto-news-distribute-{env}]  (Python 3.13 / arm64 / 512MB / 300s)
    │
    ├─► [Parameter Store] /kati/auto_news_distribute/{env}/* で設定一括取得
    ├─► [Bedrock Converse API] Tool Use で NewsDigest スキーマ強制 → 5 件取得
@@ -58,7 +58,7 @@
 
 | 必要なもの | バージョン目安 |
 |-----------|-------------|
-| Python | 3.12 (Lambda ランタイムと一致させる) |
+| Python | 3.13 (Lambda ランタイムと一致させる) |
 | AWS SAM CLI | 1.130 以降（`ScheduleV2` 対応） |
 | AWS CLI | 認証済み（profile か環境変数） |
 | Docker Desktop | `sam local invoke` を使う場合のみ |
@@ -209,7 +209,11 @@ sam deploy --config-env prod
    aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/prompt --value (Get-Content docs/design/prompt.txt -Raw) --type String --overwrite --region ap-northeast-1
    aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/recipient-emails --value "user1@katitas.jp,user2@katitas.jp" --type StringList --overwrite --region ap-northeast-1
    aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/sender-email --value "news@katitas.jp" --type String --overwrite --region ap-northeast-1
-   aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/slack-webhook-url --value "https://hooks.slack.com/services/..." --type SecureString --overwrite --region ap-northeast-1
+   aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/slack-webhook-url --value "https://hooks.slack.com/services/..." --type SecureString --overwrite --region ap-northeast-1   # 複数チャネルはカンマ/セミコロン区切りで列挙可
+   # Web 検索 API（agentic loop 用）
+   aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/news-search-provider --value "brave" --type String --overwrite --region ap-northeast-1   # 任意（未設定時 brave）
+   aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/news-search-api-key --value "BSA-..." --type SecureString --overwrite --region ap-northeast-1   # 必須（Brave: BSA-... / Tavily: tvly-...）
+   # aws ssm put-parameter --name /kati/auto_news_distribute/$ENV/news-search-max-per-invocation --value "50" --type String --overwrite --region ap-northeast-1   # 任意（未設定時 provider 既定値 brave=50/tavily=25）
    ```
 4. **動作確認** — `aws lambda invoke --function-name auto-news-distribute-stg --payload '{}' --cli-binary-format raw-in-base64-out response.json`
 
@@ -246,7 +250,8 @@ sam logs --stack-name auto-news-prod --tail
 |------|------|------|
 | `ImportError: pydantic_core` | x86_64 wheel が混入 | `infra/.aws-sam/` を削除 → `sam build --use-container` |
 | `Task timed out after 300s` | Bedrock 応答遅い | `template.yaml` の `Globals.Function.Timeout` を延長（最大 900s） |
-| `AccessDeniedException` (Bedrock) | モデル ARN が IAM ポリシーと不一致 | `BedrockModelArn` パラメータ確認 |
+| `AccessDeniedException` (Bedrock) | Inference Profile / Foundation Model の IAM 不足 | `template.yaml` の `BedrockInvoke` ステートメント（profile + foundation-model 両方許可）を確認 |
+| `ValidationException: ... on-demand throughput isn't supported` | `bedrock-model-id` が Foundation Model ID（`anthropic.*`） | APAC Inference Profile ID（`apac.anthropic.*`）に変更 → `docs/guides/bedrock-model-selection.md` |
 | `MessageRejected` (SES) | 送信元未検証 | SES コンソールで identity verify |
 | Slack `invalid_token` | Webhook URL が無効 | Slack 側で再生成 → Parameter Store 更新 |
 | `recipient-emails と slack-webhook-url の両方が空` | 設定漏れ | どちらか片方は必ず設定 |

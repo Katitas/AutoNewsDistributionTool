@@ -166,6 +166,8 @@ aws ssm put-parameter --name /kati/auto_news_distribute/${ENV}/sender-email \
   --value "news@katitas.jp" \
   --type String --overwrite --region ap-northeast-1
 
+# 複数チャネルへ同報する場合はカンマ or セミコロン区切りで複数 URL を指定可能。
+#   例: --value "https://hooks.slack.com/services/AAA,https://hooks.slack.com/services/BBB"
 aws ssm put-parameter --name /kati/auto_news_distribute/${ENV}/slack-webhook-url \
   --value "https://hooks.slack.com/services/..." \
   --type SecureString --overwrite --region ap-northeast-1

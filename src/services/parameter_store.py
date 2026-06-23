@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 import boto3
@@ -23,7 +24,9 @@ class AppConfig:
     prompt: str
     recipient_emails: list[str]
     sender_email: str
-    slack_webhook_url: str
+    # Slack Incoming Webhook URL のリスト。複数チャネルへ同報するため、
+    # Parameter Store の値をカンマ / セミコロン区切りでパースした結果を保持する。
+    slack_webhook_urls: list[str]
     # ニュース検索プロバイダ。"brave"（デフォルト）または "tavily"。
     # 空文字なら news_search.DEFAULT_PROVIDER（brave）が使われる。
     news_search_provider: str
@@ -41,7 +44,7 @@ class AppConfig:
 
     @property
     def slack_enabled(self) -> bool:
-        return bool(self.slack_webhook_url)
+        return bool(self.slack_webhook_urls)
 
 
 def load_config(parameter_path: str | None = None) -> AppConfig:
@@ -97,9 +100,11 @@ def load_config(parameter_path: str | None = None) -> AppConfig:
             f"recipient-emails が設定されているが {_PARAM_SENDER_EMAIL} が空: path={path}"
         )
 
-    slack_webhook_url = raw.get(_PARAM_SLACK_WEBHOOK_URL, "").strip()
+    # 複数チャネルへ同報するため、カンマ / セミコロン区切りで複数 Webhook URL を許容する。
+    slack_raw = raw.get(_PARAM_SLACK_WEBHOOK_URL, "")
+    slack_webhook_urls = [u.strip() for u in re.split(r"[,;]", slack_raw) if u.strip()]
 
-    if not recipient_emails and not slack_webhook_url:
+    if not recipient_emails and not slack_webhook_urls:
         raise RuntimeError(
             "recipient-emails と slack-webhook-url の両方が空です。"
             "少なくとも片方の通知チャネルを設定してください。"
@@ -134,17 +139,19 @@ def load_config(parameter_path: str | None = None) -> AppConfig:
         prompt=prompt,
         recipient_emails=recipient_emails,
         sender_email=sender_email,
-        slack_webhook_url=slack_webhook_url,
+        slack_webhook_urls=slack_webhook_urls,
         news_search_provider=news_search_provider,
         news_search_api_key=news_search_api_key,
         news_search_max_per_invocation=news_search_max_per_invocation,
     )
     logger.info(
-        "config loaded: model=%s, prompt_chars=%d, email_enabled=%s (recipients=%d), slack_enabled=%s",
+        "config loaded: model=%s, prompt_chars=%d, email_enabled=%s (recipients=%d), "
+        "slack_enabled=%s (webhooks=%d)",
         config.bedrock_model_id,
         len(config.prompt),
         config.email_enabled,
         len(config.recipient_emails),
         config.slack_enabled,
+        len(config.slack_webhook_urls),
     )
     return config

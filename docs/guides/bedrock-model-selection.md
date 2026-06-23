@@ -21,9 +21,14 @@ Bedrock の Claude 4 系（Opus/Sonnet/Haiku）は東京単独リージョンに
 
 | 区分 | 例 | 利用可否（Tokyo） |
 |------|-----|--------------------|
-| Foundation Model ID | `anthropic.claude-opus-4-7-20260101-v1:0` | × Tokyo ではエラー |
-| Inference Profile ID（APAC） | `apac.anthropic.claude-opus-4-7-20260101-v1:0` | ◯ 推奨 |
+| Foundation Model ID | `anthropic.claude-opus-4-8` | × Tokyo ではエラー（on-demand 非対応） |
+| Inference Profile ID（Japan） | `jp.anthropic.claude-opus-4-8` | ◯ 推奨（東京/大阪に限定ルーティング） |
+| Inference Profile ID（APAC） | `apac.anthropic.claude-opus-4-7-20260101-v1:0` | ◯（APAC 広域にルーティング） |
 | Inference Profile ID（US） | `us.anthropic.claude-opus-4-7-20260101-v1:0` | △ レイテンシ大 |
+
+> プレフィックスは `jp.`（日本国内 = 東京/大阪）と `apac.`（APAC 広域）が存在する。
+> どちらが利用可能かは `aws bedrock list-inference-profiles` の `inferenceProfileId` で確認すること。
+> バージョン日付サフィックスの有無もモデルにより異なるため、取得した ID をそのまま使う。
 
 ---
 
@@ -57,13 +62,34 @@ aws bedrock list-inference-profiles \
 
 ## モデルアクセス有効化（必須）
 
-初回利用時はリージョンごとに「モデルアクセス」のオプトインが必要：
+> **重要（2026 仕様変更）**: 旧「Model access」ページは**廃止**された（"Model access page has been retired"）。
+> 現在は **初回 invoke 時に自動有効化** される方式に変わっている。ただし以下2点の前提がある。
 
-1. AWS コンソール → Bedrock → Model access
-2. `Anthropic Claude Opus 4.7` 等を選択 → "Request model access"
-3. 数分以内に Approved になる（カチタス AWS アカウントは個人情報なし用途のため通常即時承認）
+### 1. Anthropic モデルの use case details 提出（初回のみ）
 
-> **注意**: STG/Prod それぞれの AWS アカウントが分かれている場合は **両方で別々に** 有効化が必要。
+Anthropic 系モデルは初回利用時に**用途説明（use case details）の提出**を求められる場合がある。
+Bedrock コンソール → Model catalog → 対象モデル → Playground を開くと表単が出るので記入・提出する。
+
+### 2. Marketplace 配信モデルの账号级有効化（初回1回）
+
+Marketplace 経由で配信されるモデルは、「**AWS Marketplace 権限を持つユーザーが1回 invoke**」すると
+**账号级で全ユーザー（Lambda 実行ロール含む）に有効化**される。
+
+- **正しい手順**: 管理者（人間の SSO PowerUser 等、Marketplace 権限あり）が Playground または CLI で
+  対象モデルを1回呼ぶ。これで账号级に有効化され、以後 Lambda の `bedrock:Converse` が通る。
+- ⚠️ **アンチパターン**: この問題を消すために Lambda 実行ロールへ `aws-marketplace:Subscribe` /
+  `ViewSubscriptions` を付与してはいけない。启用は管理者の一次性操作であり、
+  運行時ロールに恒久的な Marketplace 権限を持たせるのは過剰権限。
+
+```powershell
+# 管理者プロファイルで1回呼んで账号级有効化（例）
+aws bedrock-runtime converse `
+  --model-id jp.anthropic.claude-opus-4-8 `
+  --messages '[{"role":"user","content":[{"text":"test"}]}]' `
+  --region ap-northeast-1 --profile <admin-poweruser>
+```
+
+> **注意**: STG/Prod が別 AWS アカウントの場合は **両方で別々に** 上記の初回有効化が必要。
 
 ---
 
@@ -91,6 +117,7 @@ aws ssm put-parameter \
   Action: [bedrock:InvokeModel, bedrock:Converse]
   Resource:
     - !Sub arn:aws:bedrock:*::foundation-model/anthropic.claude-*
+    - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-*
     - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/apac.anthropic.claude-*
 ```
 

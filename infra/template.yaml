@@ -10,7 +10,7 @@ Description: >
 # -------------------------------------------------------------------
 Globals:
   Function:
-    Runtime: python3.12
+    Runtime: python3.13
     Architectures: [arm64]
     MemorySize: 512
     Timeout: 300
@@ -44,11 +44,6 @@ Parameters:
       CFn が SES Email Identity を自動作成し、AWS から検証メールが送信される。
       検証メールのリンクをクリックして Verified 状態にしないと送信できない。
     AllowedPattern: ^[^\s@]+@[^\s@]+\.[^\s@]+$
-
-  BedrockModelArn:
-    Type: String
-    Description: 使用する Bedrock モデル/Inference Profile ARN（IAM 制御用）
-    Default: arn:aws:bedrock:ap-northeast-1::foundation-model/*
 
   ScheduleCronUtc:
     Type: String
@@ -93,7 +88,11 @@ Resources:
                 - ssm:GetParametersByPath
                 - ssm:GetParameter
                 - ssm:GetParameters
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/kati/auto_news_distribute/${Environment}/*
+              # GetParametersByPath はクエリするパス自身（末尾 /* なし）を対象に
+              # 認可されるため、パス本体と配下 /* の両方を許可する必要がある。
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/kati/auto_news_distribute/${Environment}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/kati/auto_news_distribute/${Environment}/*
             - Sid: ParameterStoreDecrypt
               Effect: Allow
               Action: kms:Decrypt
@@ -106,7 +105,14 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:Converse
-              Resource: !Ref BedrockModelArn
+              # Cross-Region Inference Profile 経由で Claude を呼ぶため、
+              # Inference Profile ARN と、ルーティング先の Foundation Model ARN
+              # （リージョン横断のため region 部はワイルドカード）の両方を許可する。
+              # Profile プレフィックスは jp.（日本: 東京/大阪）と apac.（APAC 広域）の両対応。
+              Resource:
+                - !Sub arn:aws:bedrock:*::foundation-model/anthropic.claude-*
+                - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/jp.anthropic.claude-*
+                - !Sub arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/apac.anthropic.claude-*
             - Sid: SESSend
               Effect: Allow
               Action:
@@ -136,7 +142,7 @@ Resources:
             DeadLetterConfig:
               Arn: !GetAtt ScheduleDLQ.Arn
     Metadata:
-      BuildMethod: python3.12
+      BuildMethod: python3.13
       BuildProperties:
         Manifest: requirements.txt
 
@@ -260,5 +266,5 @@ Outputs:
   SenderEmailIdentityArn:
     Description: |
       SES Email Identity の ARN。
-      検証状態は AWS Console > SES > Verified identities または `aws sesv2 get-email-identity --email-identity ${SenderEmailAddress}` で確認。
+      検証状態は AWS Console > SES > Verified identities または `aws sesv2 get-email-identity --email-identity <送信元アドレス>` で確認。
     Value: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SenderEmailAddress}

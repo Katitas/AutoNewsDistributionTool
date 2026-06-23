@@ -40,6 +40,7 @@ AutoNewsDistributionTool/
 |----------|------|
 | `src/handlers/fetch_news.py` | Bedrockニュース取得・要約ハンドラー |
 | `src/handlers/send_email.py` | SESメール送信ハンドラー |
+| `src/services/url_normalizer.py` | 配信前の記事 URL 補正（既知失効ホストの書き換え。例: housenews.jp→www.housenews.jp） |
 | `infra/template.yaml` | CloudFormation メインスタック定義 |
 | `requirements.txt` | Python依存パッケージ |
 

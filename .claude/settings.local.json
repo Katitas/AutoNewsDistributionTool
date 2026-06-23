@@ -28,7 +28,11 @@
       "WebFetch(domain:aws.amazon.com)",
       "WebFetch(domain:api-dashboard.search.brave.com)",
       "Skill(claude-api)",
-      "Bash(python -m pytest tests/test_parameter_store.py -q)"
+      "Bash(python -m pytest tests/test_parameter_store.py -q)",
+      "Bash(python -m pytest -q)",
+      "Bash(sam validate *)",
+      "Bash(python *)",
+      "PowerShell(sam validate *)"
     ]
   }
 }

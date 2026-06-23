@@ -72,6 +72,7 @@ class TestSearchNews:
                     "title": "中古住宅市況回復",
                     "url": "https://example.com/article-1",
                     "description": "Brave からの本文 snippet",
+                    "page_age": "2026-06-12T08:30:00",  # ISO8601 を優先採用
                     "age": "2 hours ago",
                 }
             ]
@@ -86,11 +87,37 @@ class TestSearchNews:
         assert hits[0].title == "中古住宅市況回復"
         assert hits[0].url == "https://example.com/article-1"
         assert hits[0].snippet == "Brave からの本文 snippet"
-        assert hits[0].published_at == "2 hours ago"
+        # page_age（ISO8601）が age より優先されること
+        assert hits[0].published_at == "2026-06-12T08:30:00"
 
-        # X-Subscription-Token ヘッダで Brave を呼んでいることを確認
         called_request = urlopen_mock.call_args.args[0]
+        # X-Subscription-Token ヘッダで Brave を呼んでいることを確認
         assert called_request.headers.get("X-subscription-token") == "bsa-test"
+        # 直近24時間以内に限定する freshness=pd が付与されていること
+        assert "freshness=pd" in called_request.full_url
+
+    def test_brave_published_at_falls_back_to_age(self, mocker, monkeypatch) -> None:
+        """page_age が無い記事は相対表現の age にフォールバックすること。"""
+        monkeypatch.setenv("NEWS_SEARCH_API_KEY", "bsa-test")
+        monkeypatch.delenv("NEWS_SEARCH_PROVIDER", raising=False)
+
+        payload = {
+            "results": [
+                {
+                    "title": "page_age 欠落記事",
+                    "url": "https://example.com/article-2",
+                    "description": "snippet",
+                    "age": "3 hours ago",
+                }
+            ]
+        }
+        mocker.patch.object(
+            news_search.urllib.request, "urlopen", return_value=_ok_resp(payload)
+        )
+
+        hits = search_news(query="中古住宅", max_results=5)
+
+        assert hits[0].published_at == "3 hours ago"
 
     def test_tavily_returns_normalized_hits(self, mocker, monkeypatch) -> None:
         """Tavily の応答が SearchHit に正しく正規化されること。"""
@@ -107,7 +134,7 @@ class TestSearchNews:
                 }
             ]
         }
-        mocker.patch.object(
+        urlopen_mock = mocker.patch.object(
             news_search.urllib.request, "urlopen", return_value=_ok_resp(payload)
         )
 
@@ -117,6 +144,10 @@ class TestSearchNews:
         assert hits[0].title == "中古住宅市況回復"
         assert hits[0].url == "https://example.com/article-1"
         assert hits[0].published_at == "2026-05-01T09:00:00Z"
+
+        # 直近24時間以内に限定する days=1 が送られていること
+        sent_body = json.loads(urlopen_mock.call_args.args[0].data.decode("utf-8"))
+        assert sent_body["days"] == 1
 
     def test_missing_api_key_raises(self, monkeypatch) -> None:
         """API キー未設定時は NewsSearchError。"""

@@ -142,13 +142,6 @@ def _build_tool_config() -> dict[str, Any]:
                                     "default": 5,
                                     "description": "取得する最大件数。デフォルト5。",
                                 },
-                                "days_back": {
-                                    "type": "integer",
-                                    "minimum": 1,
-                                    "maximum": 14,
-                                    "default": 2,
-                                    "description": "何日前まで遡るか。日次配信のため2-3が標準。",
-                                },
                             },
                             "required": ["query"],
                         }
@@ -182,13 +175,12 @@ def _execute_search_tool(
     Bedrock に「予算枯渇」を通知して submit_news_digest 呼び出しを促す（エラーは投げない）。
 
     Args:
-        tool_input: Bedrock からのツール呼び出し引数（query / max_results / days_back）。
+        tool_input: Bedrock からのツール呼び出し引数（query / max_results）。
         searches_used: 本invocation内の既使用回数。
         searches_max: 本invocation内の上限回数。
     """
     query = tool_input.get("query", "")
     max_results = int(tool_input.get("max_results", 5))
-    days_back = int(tool_input.get("days_back", 2))
 
     # 予算チェック: 上限到達なら API 呼び出しせず Bedrock に通知のみ
     if searches_used >= searches_max:
@@ -212,7 +204,7 @@ def _execute_search_tool(
         }
 
     try:
-        hits = search_news(query=query, max_results=max_results, days_back=days_back)
+        hits = search_news(query=query, max_results=max_results)
         return {
             "json": {
                 "query": query,
@@ -350,7 +342,9 @@ def run_news_agent(
             system=system_prompt,
             messages=messages,
             toolConfig=tool_config,
-            inferenceConfig={"maxTokens": 4096, "temperature": 0.4},
+            # temperature は Claude Opus 4.8 以降で deprecated（指定すると
+            # ValidationException）。モデル側の既定に委ね、maxTokens のみ指定する。
+            inferenceConfig={"maxTokens": 4096},
         )
 
         last_stop_reason = response.get("stopReason")

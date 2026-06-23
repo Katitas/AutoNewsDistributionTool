@@ -3,14 +3,21 @@ from src.models.news import NewsDigest
 from src.services.parameter_store import AppConfig
 
 
-def _make_config(*, email: bool = True, slack: bool = True) -> AppConfig:
-    """テスト用の AppConfig を組み立てる。チャネル有効/無効を引数で切替可能。"""
+def _make_config(
+    *, email: bool = True, slack: bool = True, slack_webhook_urls: list[str] | None = None
+) -> AppConfig:
+    """テスト用の AppConfig を組み立てる。チャネル有効/無効を引数で切替可能。
+
+    slack_webhook_urls を明示すると複数 Webhook ケースを再現できる。
+    """
+    if slack_webhook_urls is None:
+        slack_webhook_urls = ["https://hooks.slack.com/X"] if slack else []
     return AppConfig(
         bedrock_model_id="test-model",
         prompt="プロンプト本文",
         recipient_emails=["a@example.com"] if email else [],
         sender_email="news@example.com" if email else "",
-        slack_webhook_url="https://hooks.slack.com/X" if slack else "",
+        slack_webhook_urls=slack_webhook_urls,
         news_search_provider="brave",
         news_search_api_key="bsa-test-key",
         news_search_max_per_invocation=None,
@@ -64,3 +71,22 @@ class TestLambdaHandler:
         render.assert_not_called()  # email無効ならHTMLレンダリングもスキップ
         send_slack.assert_called_once()
         assert result["sesMessageId"] is None
+
+    def test_multiple_slack_webhooks(self, mocker, sample_digest: NewsDigest) -> None:
+        """複数 Webhook 設定時は各 URL へ送信し、メッセージ数を合算する。"""
+        config = _make_config(
+            email=False,
+            slack_webhook_urls=["https://hooks.slack.com/A", "https://hooks.slack.com/B"],
+        )
+        mocker.patch.object(distribute_news, "load_config", return_value=config)
+        mocker.patch.object(distribute_news, "run_news_agent", return_value=sample_digest)
+        send_slack = mocker.patch.object(distribute_news, "send_news_by_category", return_value=3)
+
+        result = distribute_news.lambda_handler({}, None)
+
+        assert send_slack.call_count == 2
+        # 各 Webhook が正しい URL で呼ばれていること。
+        called_urls = [c.kwargs["webhook_url"] for c in send_slack.call_args_list]
+        assert called_urls == ["https://hooks.slack.com/A", "https://hooks.slack.com/B"]
+        assert result["slackWebhookCount"] == 2
+        assert result["slackMessageCount"] == 6  # 3 messages × 2 webhooks

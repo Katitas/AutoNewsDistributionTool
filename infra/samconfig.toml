@@ -26,7 +26,7 @@ resolve_s3 = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 fail_on_empty_changeset = false
-parameter_overrides = "Environment=\"stg\" AlertEmailAddress=\"admin@katitas.jp\" SenderEmailAddress=\"news@katitas.jp\""
+parameter_overrides = "Environment=\"stg\" AlertEmailAddress=\"luo-xingyi@katitas.co.jp\" SenderEmailAddress=\"news@katitas.jp\""
 # CFn がスタック内の全 Tag 対応リソースに自動伝播する。
 # Cost Explorer で集計するためには Billing コンソールで Cost Allocation Tag として有効化する必要あり。
 tags = "Project=\"AutoNewsDistribution\" Environment=\"stg\" CostCenter=\"katitas-it-newsfeed\" ManagedBy=\"SAM\""
@@ -39,5 +39,5 @@ resolve_s3 = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true   # 本番は変更セット目視確認を強制
 fail_on_empty_changeset = false
-parameter_overrides = "Environment=\"prod\" AlertEmailAddress=\"admin@katitas.jp\" SenderEmailAddress=\"news@katitas.jp\""
+parameter_overrides = "Environment=\"prod\" AlertEmailAddress=\"luo-xingyi@katitas.co.jp\" SenderEmailAddress=\"news@katitas.jp\""
 tags = "Project=\"AutoNewsDistribution\" Environment=\"prod\" CostCenter=\"katitas-it-newsfeed\" ManagedBy=\"SAM\""

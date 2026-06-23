@@ -9,6 +9,7 @@ from src.services.html_renderer import render_news_email
 from src.services.parameter_store import AppConfig, load_config
 from src.services.ses_client import send_html_email
 from src.services.slack_client import send_news_by_category
+from src.services.url_normalizer import apply_url_rewrites
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -79,6 +80,8 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         region_name=AWS_REGION,
         max_searches_per_invocation=config.news_search_max_per_invocation,
     )
+    # 既知の失効ホスト（例: housenews.jp → www.housenews.jp）を分配前に補正する。
+    digest = apply_url_rewrites(digest)
     logger.info("digest fetched: items=%d", len(digest.items))
 
     result: dict[str, Any] = {"statusCode": 200, "date": today}
@@ -91,14 +94,25 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         result["sesMessageId"] = None
 
     if config.slack_enabled:
-        result["slackMessageCount"] = send_news_by_category(
-            webhook_url=config.slack_webhook_url,
-            digest=digest,
-            date=today,
-        )
+        # 複数 Webhook（複数チャネル）へ同報する。
+        # NOTE: いずれかの Webhook で SlackSendError が出ると以降は送らず例外を上げる。
+        # Scheduler のリトライで再実行されると、成功済み Webhook には重複投稿されうる
+        # （冪等性は未保証。現状要件では許容範囲）。
+        slack_total = 0
+        webhook_count = len(config.slack_webhook_urls)
+        for idx, webhook_url in enumerate(config.slack_webhook_urls, start=1):
+            slack_total += send_news_by_category(
+                webhook_url=webhook_url,
+                digest=digest,
+                date=today,
+            )
+            logger.info("slack webhook done: %d/%d", idx, webhook_count)
+        result["slackMessageCount"] = slack_total
+        result["slackWebhookCount"] = webhook_count
     else:
-        logger.info("slack skipped: slack_webhook_url が空")
+        logger.info("slack skipped: slack-webhook-url が空")
         result["slackMessageCount"] = 0
+        result["slackWebhookCount"] = 0
 
     logger.info("invocation success: %s", result)
     return result

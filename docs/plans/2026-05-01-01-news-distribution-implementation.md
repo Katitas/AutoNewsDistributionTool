@@ -45,7 +45,7 @@
 
 | 項目 | 値 |
 |------|-----|
-| ランタイム | Python 3.12 |
+| ランタイム | Python 3.13 |
 | メモリ | 512 MB（要調整） |
 | タイムアウト | 5分（Bedrock呼び出し時間考慮） |
 | ハンドラー | `src/handlers/distribute_news.lambda_handler` |
@@ -66,7 +66,7 @@
 | `/kati/auto_news_distribute/{env}/prompt` | String | **必須** | Bedrockに送るプロンプト本文（4KB上限。`docs/design/prompt.txt` から反映） |
 | `/kati/auto_news_distribute/{env}/recipient-emails` | StringList / String | 任意 | 送信先メールアドレス（カンマ区切り、空ならメール送信スキップ） |
 | `/kati/auto_news_distribute/{env}/sender-email` | String | recipient-emails 設定時のみ必須 | SES送信元（要SES検証済み） |
-| `/kati/auto_news_distribute/{env}/slack-webhook-url` | SecureString | 任意 | Slack Incoming Webhook URL（空ならSlack送信スキップ） |
+| `/kati/auto_news_distribute/{env}/slack-webhook-url` | SecureString | 任意 | Slack Incoming Webhook URL。複数チャネルはカンマ/セミコロン区切りで列挙可。空ならSlack送信スキップ |
 
 **バリデーション**: `recipient-emails` と `slack-webhook-url` の両方が空の場合は起動エラー。
 

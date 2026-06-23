@@ -117,19 +117,17 @@ def _search_brave(
     query: str,
     max_results: int,
     api_key: str,
-    days_back: int,  # noqa: ARG001 — Brave は freshness を相対値で指定するため未使用
 ) -> list[SearchHit]:
     """Brave News Search API を呼び出す。
 
     Brave Search の `news` エンドポイントは記事のみを返す。
-    `freshness=pd`(過去24時間)/`pw`(過去1週間)/`pm`(過去1ヶ月) を指定可能。
-    日次配信のため `pw` をデフォルトに使用（前日の朝刊取り逃しを防ぐ目的）。
+    本ツールは「直近24時間以内（1日以内）」のニュースのみを対象とするため、
+    `freshness=pd`（past day = 過去24時間）を固定で指定する。
 
     Args:
         query: 検索キーワード。
         max_results: 取得件数（1〜20）。
         api_key: Brave API Subscription Token。
-        days_back: 互換用（Brave では freshness 相対指定のため未使用）。
 
     Raises:
         NewsSearchError: HTTP / 接続エラー時。
@@ -137,7 +135,7 @@ def _search_brave(
     params = {
         "q": query,
         "count": str(max(1, min(max_results, 20))),
-        "freshness": "pd",
+        "freshness": "pd",  # past day = 直近24時間以内に限定
         "country": "JP",
         "search_lang": "jp",
         "safesearch": "moderate",
@@ -169,7 +167,9 @@ def _search_brave(
             title=item.get("title", ""),
             url=item.get("url", ""),
             snippet=(item.get("description") or "")[:1500],
-            published_at=item.get("age"),  # Brave は "1 hour ago" 形式。完全な ISO は取れない
+            # page_age は ISO8601（例: "2026-06-12T08:30:00"）で精度が高い。
+            # 取得できない記事は相対表現の age（"1 hour ago"）にフォールバック。
+            published_at=item.get("page_age") or item.get("age"),
         )
         for item in data.get("results", [])
     ]
@@ -187,12 +187,12 @@ def _search_tavily(
     query: str,
     max_results: int,
     api_key: str,
-    days_back: int,
 ) -> list[SearchHit]:
     """Tavily Search API を呼び出す。
 
     Tavily は LLM agent 向けに設計された API で、コンテンツを LLM 用に要約済み。
     ニュース系クエリは `topic="news"` を指定すると鮮度が改善する。
+    Brave と揃え、直近24時間以内（`days=1`）のニュースのみを対象とする。
 
     Raises:
         NewsSearchError: HTTP エラー / 接続エラー時。
@@ -203,7 +203,7 @@ def _search_tavily(
         "topic": "news",
         "search_depth": "basic",
         "max_results": max_results,
-        "days": days_back,
+        "days": 1,  # 直近24時間以内（1日）に限定
         "include_answer": False,
         "include_raw_content": False,
     }
@@ -247,11 +247,13 @@ def search_news(
     *,
     query: str,
     max_results: int = 5,
-    days_back: int = 2,
     provider: SearchProvider | None = None,
     api_key: str | None = None,
 ) -> list[SearchHit]:
     """指定キーワードで実ニュースを検索する。
+
+    対象は「直近24時間以内（1日以内）」のニュースに固定する
+    （Brave は `freshness=pd`、Tavily は `days=1`）。
 
     プロバイダは引数 > 環境変数 `NEWS_SEARCH_PROVIDER` > `DEFAULT_PROVIDER` の順で決定。
     API キーは引数 > 環境変数 `NEWS_SEARCH_API_KEY` から取得。
@@ -260,7 +262,6 @@ def search_news(
     Args:
         query: 検索キーワード（例: "中古住宅 リフォーム 補助金 2026"）。
         max_results: 取得する最大件数。Bedrock の context 圧迫を避け 5 程度に抑える。
-        days_back: 何日前まで遡るか（Tavily のみ反映、Brave は freshness 相対）。
         provider: "brave" or "tavily"。None の場合は環境変数 / デフォルト。
         api_key: 該当プロバイダの API キー。None の場合は環境変数。
 
@@ -280,13 +281,9 @@ def search_news(
 
     logger.info("news_search start: provider=%s, query=%s", chosen_provider, query)
     if chosen_provider == "brave":
-        hits = _search_brave(
-            query=query, max_results=max_results, api_key=chosen_key, days_back=days_back
-        )
+        hits = _search_brave(query=query, max_results=max_results, api_key=chosen_key)
     elif chosen_provider == "tavily":
-        hits = _search_tavily(
-            query=query, max_results=max_results, api_key=chosen_key, days_back=days_back
-        )
+        hits = _search_tavily(query=query, max_results=max_results, api_key=chosen_key)
     else:  # pragma: no cover — resolve_provider が必ず既知の値を返すはず
         raise NewsSearchError(
             f"未知のプロバイダ: {chosen_provider}", provider=chosen_provider
