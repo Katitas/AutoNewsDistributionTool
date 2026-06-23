@@ -21,10 +21,11 @@
             line-height: 1.7;
         }
 
-        /* 長文要約のクランプ表示（モダンクライアントのみ。Outlook desktopは全文表示） */
+        /* 要約のクランプ表示（モダンクライアントのみ。Outlook desktopは全文表示）。
+           summary は 60〜120字（2〜3行）に短縮済みのため、上限到達時の保険として3行で抑える。 */
         .summary-clamp {
             display: -webkit-box;
-            -webkit-line-clamp: 6;
+            -webkit-line-clamp: 3;
             -webkit-box-orient: vertical;
             overflow: hidden;
         }
@@ -40,7 +41,7 @@
             .news-summary { font-size: 15px !important; line-height: 1.75 !important; }
             .category-badge { font-size: 11px !important; padding: 4px 10px !important; }
             .footer-text { font-size: 11px !important; }
-            .summary-clamp { -webkit-line-clamp: 8; }
+            .summary-clamp { -webkit-line-clamp: 3; }
         }
 
         @media (prefers-color-scheme: dark) {

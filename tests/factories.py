@@ -13,7 +13,11 @@ from src.models.news import (
     NewsItem,
 )
 
-_DEFAULT_SUMMARY = "国内主要PropTech3社が中古戸建向けAI査定サービスを公開した。" * 6
+# summary は 60〜120字（2〜3行）制約。63字で範囲内に収める。
+_DEFAULT_SUMMARY = (
+    "国内主要PropTech3社が中古戸建向けのAI査定サービスを相次いで公開した。"
+    "査定精度の向上で買取業務の効率化が期待される。"
+)
 _DEFAULT_RELEVANCE = (
     "買取査定の一次スクリーニングに活用できる可能性があります。"
     "営業所別の査定品質ばらつき解消に有効です。"

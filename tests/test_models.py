@@ -14,7 +14,7 @@ from tests.factories import make_balanced_items
 def _valid_item_kwargs() -> dict:
     return {
         "title": "テストニュース",
-        "summary": "あ" * 250,
+        "summary": "あ" * 90,
         "category": "PropTech",
         "katitas_relevance": "業務に役立つ示唆。" * 5,
         "source_url": "https://example.com/article/1",
@@ -34,7 +34,7 @@ class TestNewsItem:
 
     def test_summary_too_long_rejected(self) -> None:
         kwargs = _valid_item_kwargs()
-        kwargs["summary"] = "あ" * 801
+        kwargs["summary"] = "あ" * 121
         with pytest.raises(ValidationError):
             NewsItem(**kwargs)
 

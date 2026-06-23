@@ -355,9 +355,9 @@ def run_news_agent(
             toolConfig=tool_config,
             # temperature は Claude Opus 4.8 以降で deprecated（指定すると
             # ValidationException）。モデル側の既定に委ね、maxTokens のみ指定する。
-            # 30件 ×（summary 最大800字 + relevance 最大300字 + JSON overhead）は
-            # 4096 tokens では確実に溢れて出力が途中で切れ submit が壊れるため、
-            # 件数増に合わせて大幅に引き上げる。
+            # 30件 ×（summary 最大120字 + relevance 最大300字 + JSON overhead）。
+            # summary 短縮後も submit 1回で全件を吐き切れるよう余裕を持たせる
+            # （旧 4096 では溢れて出力が途中で切れ submit が壊れた）。
             inferenceConfig={"maxTokens": 32000},
         )
 

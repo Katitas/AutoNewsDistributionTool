@@ -33,7 +33,8 @@
       "Bash(sam validate *)",
       "Bash(python *)",
       "PowerShell(sam validate *)",
-      "Bash(grep -iA8 \"pytest\\\\|testpath\\\\|pythonpath\")"
+      "Bash(grep -iA8 \"pytest\\\\|testpath\\\\|pythonpath\")",
+      "PowerShell(python -m pytest -q 2>&1 | Select-Object -Last 25)"
     ]
   }
 }
