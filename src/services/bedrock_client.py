@@ -60,6 +60,12 @@ SEARCH_TOOL_DESCRIPTION = (
 # 想定: 検索 15〜25回 + 最終 submit 1回。余裕を見て 30 ターンで打ち止め。
 _MAX_AGENT_TURNS = 30
 
+# submit_news_digest の検証失敗時に許す再試行の上限（初回含む）。
+# 検証失敗ごとにエラーを返して再submitを促すが、構造的に満たせない場合に
+# 巨大な submit(30件≒11Kトークン) を延々と再生成して timeout / コスト暴走するのを防ぐ。
+# 1 submit ≒ 200秒のため、3回(初回+2回)でも時間予算(900秒)内に収まる。達したら即raise。
+_MAX_SUBMIT_ATTEMPTS = 3
+
 # 1 Lambda invocation あたりの search_real_news 呼び出し上限。
 # プロバイダごとのデフォルトは src/services/news_search.py:PROVIDER_DEFAULT_CAPS で管理。
 #   Brave Free  : 50/起動（無料 2000 query/月の保護）
@@ -352,6 +358,10 @@ def run_news_agent(
 
     last_stop_reason: str | None = None
     last_content: list[dict[str, Any]] = []
+    # 直近の submit 検証失敗。即raiseせず再submitを促し、上限到達時に送出する。
+    last_validation_error: ValidationError | None = None
+    # submit 検証失敗の累計回数。_MAX_SUBMIT_ATTEMPTS に達したら暴走防止で即raise。
+    submit_attempts = 0
 
     for turn in range(max_turns):
         logger.info("agent turn=%d start", turn)
@@ -372,55 +382,91 @@ def run_news_agent(
         last_content = response["output"]["message"]["content"]
         logger.info("agent turn=%d stop_reason=%s", turn, last_stop_reason)
 
-        # 1) submit_news_digest が呼ばれたら最終結果として処理して終了
-        for block in last_content:
-            if "toolUse" not in block:
-                continue
-            name = block["toolUse"].get("name")
-            if name == SUBMIT_TOOL_NAME:
-                tool_input = block["toolUse"]["input"]
-                logger.info(
-                    "agent submit: searches_used=%d/%d, turn=%d",
-                    searches_used,
-                    searches_max,
-                    turn,
-                )
-                try:
-                    return NewsDigest.model_validate(tool_input)
-                except ValidationError as e:
-                    raise BedrockToolUseError(
-                        f"NewsDigest 検証失敗: {e}",
-                        stop_reason=last_stop_reason,
-                        content_blocks=last_content,
-                        validation_errors=str(e),
-                    ) from e
-
-        # 2) search_real_news が呼ばれたら検索を実行し、toolResult を作って次ターンへ
+        # toolUse ブロックを1パスで処理する。
+        #   submit_news_digest → 検証OKなら即return。検証NGなら即raiseせず、エラー内容を
+        #     toolResult(status=error) で返してモデルに submit のやり直しを促す（自己修復）。
+        #     30件中1件のスキーマ違反で日次配信全体が落ちるのを防ぐ。
+        #   search_real_news   → 検索を実行し toolResult を作って次ターンへ。
         tool_results: list[dict[str, Any]] = []
         for block in last_content:
             if "toolUse" not in block:
                 continue
             tu = block["toolUse"]
-            if tu.get("name") != SEARCH_TOOL_NAME:
+            name = tu.get("name")
+            tu_id = tu["toolUseId"]
+
+            if name == SUBMIT_TOOL_NAME:
+                logger.info(
+                    "agent submit attempt: searches_used=%d/%d, turn=%d",
+                    searches_used,
+                    searches_max,
+                    turn,
+                )
+                try:
+                    return NewsDigest.model_validate(tu.get("input", {}))
+                except ValidationError as e:
+                    last_validation_error = e
+                    submit_attempts += 1
+                    logger.warning(
+                        "agent submit validation failed turn=%d attempt=%d/%d: %s",
+                        turn,
+                        submit_attempts,
+                        _MAX_SUBMIT_ATTEMPTS,
+                        e,
+                    )
+                    # 上限到達: これ以上の再submitは timeout / コスト暴走を招くため即raise。
+                    if submit_attempts >= _MAX_SUBMIT_ATTEMPTS:
+                        raise BedrockToolUseError(
+                            f"submit_news_digest の検証が {_MAX_SUBMIT_ATTEMPTS} 回連続で失敗: {e}",
+                            stop_reason=last_stop_reason,
+                            content_blocks=last_content,
+                            validation_errors=str(e),
+                        ) from e
+                    tool_results.append(
+                        {
+                            "toolResult": {
+                                "toolUseId": tu_id,
+                                "content": [
+                                    {
+                                        "json": {
+                                            "error": "validation_failed",
+                                            "detail": str(e),
+                                            "hint": (
+                                                "各フィールドの文字数制約（summary 40〜120字、"
+                                                "title 1〜120字、katitas_relevance 40〜300字）と、"
+                                                f"各カテゴリちょうど {ITEMS_PER_CATEGORY} 件"
+                                                f"（計 {TOTAL_ITEMS} 件）を満たすよう修正し、"
+                                                "再度 submit_news_digest を呼び出してください。"
+                                            ),
+                                        }
+                                    }
+                                ],
+                                "status": "error",
+                            }
+                        }
+                    )
                 continue
-            result_content = _execute_search_tool(
-                tu.get("input", {}),
-                searches_used=searches_used,
-                searches_max=searches_max,
-            )
-            # 実際に Tavily を叩いた場合のみカウントを進める。
-            # 上限到達による空応答や、searches_max 到達後の追加呼び出しはカウントしない。
-            if not result_content["json"].get("budget_exhausted"):
-                searches_used += 1
-            tool_results.append(
-                {
-                    "toolResult": {
-                        "toolUseId": tu["toolUseId"],
-                        "content": [result_content],
-                        "status": "success" if "error" not in result_content["json"] else "error",
+
+            if name == SEARCH_TOOL_NAME:
+                result_content = _execute_search_tool(
+                    tu.get("input", {}),
+                    searches_used=searches_used,
+                    searches_max=searches_max,
+                )
+                # 実際に検索 API を叩いた場合のみカウントを進める。
+                # 上限到達による空応答や、searches_max 到達後の追加呼び出しはカウントしない。
+                if not result_content["json"].get("budget_exhausted"):
+                    searches_used += 1
+                tool_results.append(
+                    {
+                        "toolResult": {
+                            "toolUseId": tu_id,
+                            "content": [result_content],
+                            "status": "success" if "error" not in result_content["json"] else "error",
+                        }
                     }
-                }
-            )
+                )
+                continue
 
         if not tool_results:
             # ツール呼び出しが無く submit もされていない = 想定外（プレーンテキスト応答等）
@@ -436,6 +482,14 @@ def run_news_agent(
         # ユーザー側として toolResult を返す
         messages.append({"role": "user", "content": tool_results})
 
+    # ループ上限到達。直近で submit の検証に失敗していたなら、その内容を添えて送出する。
+    if last_validation_error is not None:
+        raise BedrockToolUseError(
+            f"submit_news_digest の検証に {max_turns} ターン以内で成功しなかった: {last_validation_error}",
+            stop_reason=last_stop_reason,
+            content_blocks=last_content,
+            validation_errors=str(last_validation_error),
+        )
     raise BedrockToolUseError(
         f"エージェントループが {max_turns} ターン到達したが submit_news_digest が呼ばれなかった。"
         f" (searches_used={searches_used}/{searches_max})",

@@ -8,6 +8,20 @@
   - 规避方法: 接收者「右键复制链接」后在浏览器打开，而非直接点击；或从邮件（SES HTML）端打开
   - 备注: 若日后改主意，`src/services/url_normalizer.py` 的 `_HOST_REWRITES`（#15a）可作为后端缓解基础设施（如赌「裸域 `nikkei.com` 重定向才是小写化环节」，加 `"nikkei.com": "www.nikkei.com"`）
 
+## ✅ 已解决（2026-06-24）
+
+- [x] **#17** prod Lambda `BedrockToolUseError: NewsDigest 検証失敗`（summary < 60 字 → 单件违反导致全滞）
+  - 现象: `items.23.summary String should have at least 60 characters`（input `'世界的な金利上昇...新聞が報じた。'`）→ submit 验证失败 → 即 raise → **当日新闻分发整体异常终止（0 件）**
+  - 根因①（约束矛盾）: `summary` 的 `min_length=60` 与「2〜3行で簡潔に」的指示矛盾。模型写得简洁正确时反被弹回。30 件中只要 1 件低于 60 字即失败
+  - 根因②（脆弱性）: `bedrock_client.py:run_news_agent` 中 submit 验证失败 **即 raise**，无重试反馈。任一字段（summary/relevance 字数、各分类件数）违反都会让整日批处理归零
+  - 解决（3 层防御：预防 + 保证 + 歯止め）:
+    - **① 预防（prompt）**: `docs/design/prompt.txt` 把 summary 约束从「字数」改为「**必ず2〜3文**」主轴（LLM 无法精确数字数，但能可靠遵守句数；2〜3 文自然超过 40 字）
+    - **② 保证（schema）**: `src/models/news.py` `summary.min_length` 60 → **40**（最后的砦，与简洁指示一致）
+    - **③ 自己修复 + 歯止め（bedrock_client）**: submit 验证失败时不立即 raise，而是把验证错误以 `toolResult(status=error)` + 修正提示返回模型促其重新 submit；但新增 `_MAX_SUBMIT_ATTEMPTS=3` 上限，**连续失败达到 3 次即 raise**，防止结构性无法满足时无限重生成 30 件(≒11K token) 导致 timeout / 成本暴走（1 submit≒200s，3 次仍在 900s 内）
+  - 影响文件: `src/models/news.py`, `docs/design/prompt.txt`, `src/services/bedrock_client.py`, `tests/test_bedrock_client.py`
+  - 测试: 79 passed（更新「持续失败→3 次封顶 raise」用例 + 新增「首次失败→二次成功回复」用例）
+  - ⚠️ **需重新部署 prod（代码变更）+ 重新投入 Parameter Store prompt**: `cd infra && sam build && sam deploy --config-env prod` 且 `aws ssm put-parameter --name /kati/auto_news_distribute/prod/prompt --value (Get-Content docs/design/prompt.txt -Raw) --type String --overwrite --region ap-northeast-1`
+
 ## ✅ 已解决（2026-06-23）
 
 - [x] **#16** prod Lambda 调用超时 `Sandbox.Timedout: Task timed out after 300.00 seconds`

@@ -5,6 +5,7 @@ from src.services.bedrock_client import (
     SEARCH_TOOL_NAME,
     SUBMIT_TOOL_NAME,
     BedrockToolUseError,
+    _MAX_SUBMIT_ATTEMPTS,
     _build_tool_config,
     _inline_refs,
     _resolve_max_searches,
@@ -151,14 +152,38 @@ class TestFetchNewsDigest:
         with pytest.raises(BedrockToolUseError, match="想定外"):
             fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
 
-    def test_invalid_tool_input_raises(self, mocker) -> None:
+    def test_invalid_tool_input_capped_then_raises(self, mocker) -> None:
+        """submit が毎ターン検証失敗し続けても、_MAX_SUBMIT_ATTEMPTS で打ち切って例外。
+
+        構造的に満たせない submit を延々と再生成して timeout / コスト暴走するのを防ぐ歯止め。
+        """
         bad_input = {"items": [{"title": "x"}]}  # 不正なデータ
         mock_client = mocker.Mock()
         mock_client.converse.return_value = self._stub_response(bad_input)
         mocker.patch.object(bedrock_client.boto3, "client", return_value=mock_client)
 
-        with pytest.raises(BedrockToolUseError, match="検証失敗"):
+        with pytest.raises(BedrockToolUseError, match="回連続で失敗"):
             fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
+        # 上限回数ちょうどで打ち切る（青天井リトライしない）
+        assert mock_client.converse.call_count == _MAX_SUBMIT_ATTEMPTS
+
+    def test_invalid_submit_then_valid_recovers(self, mocker) -> None:
+        """1回目の submit が検証失敗でも、エラーを返して再submitさせ2回目が正しければ成功する。
+
+        30件中1件のスキーマ違反（summary が短い等）で日次配信全体が落ちないための自己修復ループ。
+        """
+        bad_input = {"items": [{"title": "x"}]}  # 不正なデータ
+        mock_client = mocker.Mock()
+        mock_client.converse.side_effect = [
+            self._stub_response(bad_input),
+            self._stub_response(_valid_tool_input()),
+        ]
+        mocker.patch.object(bedrock_client.boto3, "client", return_value=mock_client)
+
+        digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
+        assert len(digest.items) == TOTAL_ITEMS
+        # 1回目失敗 → 2回目で回復（converse は2回呼ばれる）
+        assert mock_client.converse.call_count == 2
 
     def test_calls_converse_with_correct_params(self, mocker) -> None:
         """初回 converse 呼び出し時のパラメータが期待通りであること。"""
