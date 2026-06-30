@@ -40,12 +40,13 @@ def _build_env() -> Environment:
     )
 
 
-def render_news_email(*, digest: NewsDigest, date: str) -> str:
+def render_news_email(*, digest: NewsDigest, date: str, notice: str | None = None) -> str:
     """Jinja2 で HTML メール本文をレンダリングする。
 
     Args:
-        digest: NewsDigest（全6カテゴリ各5件・計30件のニュース）。
+        digest: NewsDigest（関連ニュース。件数は可変）。
         date: 配信対象日（YYYY-MM-DD）。HTML タイトルとヘッダに表示。
+        notice: 不足通知文（build_coverage_notice の戻り値）。None なら非表示。
 
     Returns:
         HTML文字列（SES の Body.Html.Data へそのまま渡せる形式）。
@@ -55,6 +56,7 @@ def render_news_email(*, digest: NewsDigest, date: str) -> str:
     return template.render(
         date=date,
         items=digest.items,
+        notice=notice,
         category_colors=CATEGORY_COLORS,
         category_text_colors=CATEGORY_TEXT_COLORS,
     )

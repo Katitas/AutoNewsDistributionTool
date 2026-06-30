@@ -3,7 +3,7 @@
 Bedrock 自身が以下のループを回す:
     1. プロンプト + 本日の日付を受け取る
     2. キーワードを決定し `search_real_news` ツールを呼ぶ
-    3. 検索結果を読んで全カテゴリ各5件（計30件）を選定
+    3. 検索結果を読んで関連ニュースを選定（目標 全カテゴリ各5件・計30件、不足時は少なくてよい）
     4. `submit_news_digest` ツールに構造化結果を渡して終了
 
 Lambda 内では本ファイルの `run_news_agent()` を呼ぶだけで、
@@ -26,7 +26,8 @@ from pydantic import ValidationError
 from src.models.news import (
     CATEGORIES,
     ITEMS_PER_CATEGORY,
-    TOTAL_ITEMS,
+    MAX_PER_CATEGORY,
+    TARGET_TOTAL_ITEMS,
     NewsDigest,
 )
 from src.services.news_search import (
@@ -40,7 +41,8 @@ logger = logging.getLogger(__name__)
 
 SUBMIT_TOOL_NAME = "submit_news_digest"
 SUBMIT_TOOL_DESCRIPTION = (
-    f"本日のニュースダイジェストを全{len(CATEGORIES)}カテゴリ各{ITEMS_PER_CATEGORY}件・計{TOTAL_ITEMS}件、"
+    "不動産事業に関連するニュースを"
+    f"目標 全{len(CATEGORIES)}カテゴリ各{ITEMS_PER_CATEGORY}件・計{TARGET_TOTAL_ITEMS}件（不足時は少なくてよい）、"
     "構造化データとして送信する。"
     "search_real_news で十分な裏取りを行った後、最後にこのツールを必ず呼び出して終了すること。"
     "プレーンテキストでの応答は禁止。"
@@ -49,7 +51,7 @@ SUBMIT_TOOL_DESCRIPTION = (
 SEARCH_TOOL_NAME = "search_real_news"
 SEARCH_TOOL_DESCRIPTION = (
     "実際のWebニュース記事を検索する。日本語キーワードで実在する記事のtitle/url/snippetを取得できる。"
-    f"本日のニュース計{TOTAL_ITEMS}件（各カテゴリ{ITEMS_PER_CATEGORY}件）を選ぶ前に、"
+    f"目標 本日のニュース計{TARGET_TOTAL_ITEMS}件（各カテゴリ{ITEMS_PER_CATEGORY}件）を選ぶ前に、"
     "必ずこのツールを複数回呼び出して候補記事の裏取りを行うこと。"
     "URL を捏造するのではなく、このツールが返した URL のみを submit_news_digest の source_url に使うこと。"
     "1回の起動で呼び出せる回数には上限あり。上限到達時はその時点までの結果で submit_news_digest を呼び終了すること。"
@@ -340,14 +342,15 @@ def run_news_agent(
                 f"残り回数を見ながら戦略を調整してください。\n\n"
                 f"## 作業フロー\n"
                 f"1. 必ず {SEARCH_TOOL_NAME} を複数回呼んで実在記事の裏取りを行う\n"
-                f"2. 取得した記事から、以下 {len(CATEGORIES)} カテゴリ各 {ITEMS_PER_CATEGORY} 件・計 {TOTAL_ITEMS} 件を選定\n"
+                f"2. 取得した記事から、目標 {len(CATEGORIES)} カテゴリ各 {ITEMS_PER_CATEGORY} 件・計 {TARGET_TOTAL_ITEMS} 件を選定\n"
+                f"   （内容が不動産・住宅と無関係なニュースは除外。関連が不足するカテゴリは少なくてよく、"
+                f"豊富なカテゴリは最大 {MAX_PER_CATEGORY} 件まで）\n"
                 f"   対象カテゴリ: {' / '.join(CATEGORIES)}\n"
-                f"   ※ 各カテゴリちょうど {ITEMS_PER_CATEGORY} 件でないと検証エラーになり再提出が必要。\n"
                 f"3. 最後に {SUBMIT_TOOL_NAME} を 1 回呼んで終了する\n\n"
                 f"## 厳守事項\n"
                 f"URL は捏造禁止。{SEARCH_TOOL_NAME} が返した url のみ source_url に使うこと。"
                 f"検索予算が尽きた場合（budget_exhausted=true が返ったら）、"
-                f"その時点までの検索結果から各カテゴリ {ITEMS_PER_CATEGORY} 件（計 {TOTAL_ITEMS} 件）を選び、"
+                f"その時点までの関連記事を各カテゴリ最大 {MAX_PER_CATEGORY} 件・計 {TARGET_TOTAL_ITEMS} 件を上限に選び、"
                 f"{SUBMIT_TOOL_NAME} を呼んで正常終了してください。"
             )
         }
@@ -432,10 +435,8 @@ def run_news_agent(
                                             "error": "validation_failed",
                                             "detail": str(e),
                                             "hint": (
-                                                "各フィールドの文字数制約（summary 40〜120字、"
-                                                "title 1〜120字、katitas_relevance 40〜300字）と、"
-                                                f"各カテゴリちょうど {ITEMS_PER_CATEGORY} 件"
-                                                f"（計 {TOTAL_ITEMS} 件）を満たすよう修正し、"
+                                                "各フィールドの文字数制約（summary 40〜120字、title 1〜120字、"
+                                                "katitas_relevance 40〜300字）と source_url の形式を満たすよう修正し、"
                                                 "再度 submit_news_digest を呼び出してください。"
                                             ),
                                         }

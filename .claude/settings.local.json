@@ -36,7 +36,13 @@
       "Bash(grep -iA8 \"pytest\\\\|testpath\\\\|pythonpath\")",
       "PowerShell(python -m pytest -q 2>&1 | Select-Object -Last 25)",
       "PowerShell(python -m pytest -q 2>&1 | Select-Object -Last 8)",
-      "PowerShell(python -m pytest -q 2>&1 | Select-Object -Last 12)"
+      "PowerShell(python -m pytest -q 2>&1 | Select-Object -Last 12)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git merge *)",
+      "Bash(git branch *)",
+      "PowerShell(pytest *)"
     ]
   }
 }

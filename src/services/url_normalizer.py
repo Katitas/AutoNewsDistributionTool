@@ -22,8 +22,10 @@ logger = logging.getLogger(__name__)
 # スキーム・パス・クエリ・フラグメントは保持し、ホスト名のみ差し替える。
 #
 #   housenews.jp → www.housenews.jp（www 無しはアクセス不可。docs/issues #15）
+#   dreamnews.jp → www.dreamnews.jp（www 無しはアクセス不可。2026-06-30 確認）
 _HOST_REWRITES: dict[str, str] = {
     "housenews.jp": "www.housenews.jp",
+    "dreamnews.jp": "www.dreamnews.jp",
 }
 
 

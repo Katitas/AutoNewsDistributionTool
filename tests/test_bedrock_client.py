@@ -11,7 +11,7 @@ from src.services.bedrock_client import (
     _resolve_max_searches,
     fetch_news_digest,
 )
-from src.models.news import TOTAL_ITEMS
+from src.models.news import TARGET_TOTAL_ITEMS
 from src.services.news_search import PROVIDER_DEFAULT_CAPS
 from tests.factories import make_balanced_items
 
@@ -137,7 +137,7 @@ class TestFetchNewsDigest:
         mocker.patch.object(bedrock_client.boto3, "client", return_value=mock_client)
 
         digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
-        assert len(digest.items) == TOTAL_ITEMS
+        assert len(digest.items) == TARGET_TOTAL_ITEMS
 
     def test_no_tool_use_block_raises(self, mocker) -> None:
         """ツール呼び出しが一切ないプレーンテキスト応答は想定外として例外。"""
@@ -181,7 +181,7 @@ class TestFetchNewsDigest:
         mocker.patch.object(bedrock_client.boto3, "client", return_value=mock_client)
 
         digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
-        assert len(digest.items) == TOTAL_ITEMS
+        assert len(digest.items) == TARGET_TOTAL_ITEMS
         # 1回目失敗 → 2回目で回復（converse は2回呼ばれる）
         assert mock_client.converse.call_count == 2
 
@@ -286,7 +286,7 @@ class TestFetchNewsDigest:
             max_searches_per_invocation=1,  # 上限1で即座に枯渇させる
         )
 
-        assert len(digest.items) == TOTAL_ITEMS
+        assert len(digest.items) == TARGET_TOTAL_ITEMS
         # Tavily は1回だけ叩かれた（上限1）。2回目の search は API を叩いていない
         assert search_spy.call_count == 1
 
@@ -324,6 +324,6 @@ class TestFetchNewsDigest:
         )
 
         digest = fetch_news_digest(model_id="test-model", prompt="prompt", today="2026-05-01")
-        assert len(digest.items) == TOTAL_ITEMS
+        assert len(digest.items) == TARGET_TOTAL_ITEMS
         # 2ターン分 converse が呼ばれていること
         assert mock_client.converse.call_count == 2

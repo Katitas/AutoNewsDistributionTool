@@ -90,3 +90,20 @@ class TestLambdaHandler:
         assert called_urls == ["https://hooks.slack.com/A", "https://hooks.slack.com/B"]
         assert result["slackWebhookCount"] == 2
         assert result["slackMessageCount"] == 6  # 3 messages × 2 webhooks
+
+    def test_partial_digest_passes_notice_to_slack(self, mocker) -> None:
+        """件数不足の digest では notice が生成され、Slack 送信に渡される。"""
+        from tests.factories import make_items
+
+        partial = NewsDigest(items=make_items({"PropTech": 3, "企業動向": 2}))
+        mocker.patch.object(distribute_news, "load_config", return_value=_make_config(email=False))
+        mocker.patch.object(distribute_news, "run_news_agent", return_value=partial)
+        send_slack = mocker.patch.object(distribute_news, "send_news_by_category", return_value=2)
+
+        result = distribute_news.lambda_handler({}, None)
+
+        assert result["statusCode"] == 200
+        # notice（不足あり）が Slack 送信に渡されている
+        notice_arg = send_slack.call_args.kwargs["notice"]
+        assert notice_arg is not None
+        assert "PropTech(3件)" in notice_arg

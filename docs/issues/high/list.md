@@ -8,6 +8,15 @@
   - 规避方法: 接收者「右键复制链接」后在浏览器打开，而非直接点击；或从邮件（SES HTML）端打开
   - 备注: 若日后改主意，`src/services/url_normalizer.py` 的 `_HOST_REWRITES`（#15a）可作为后端缓解基础设施（如赌「裸域 `nikkei.com` 重定向才是小写化环节」，加 `"nikkei.com": "www.nikkei.com"`）
 
+## ✅ 已解决（2026-06-30）
+
+- [x] **#15c** dreamnews.jp URL 缺 `www` 导致失效 → host 重写表に追加
+  - 现象: `https://dreamnews.jp/...` 无法访问，实际网页确认后需 `https://www.dreamnews.jp/...`
+  - 解决: `src/services/url_normalizer.py` 的 `_HOST_REWRITES` 追加 `"dreamnews.jp": "www.dreamnews.jp"`（#15a と同一機構、host のみ書き換え・scheme/path/query 保持）
+  - 影响文件: `src/services/url_normalizer.py`, `tests/test_url_normalizer.py`（dreamnews 书き换え用例 +1）
+  - 测试: 91 passed（回归无）
+  - ⚠️ 需重新部署 prod（代码变更）: `cd infra && sam build && sam deploy --config-env prod`
+
 ## ✅ 已解决（2026-06-24）
 
 - [x] **#17** prod Lambda `BedrockToolUseError: NewsDigest 検証失敗`（summary < 60 字 → 单件违反导致全滞）

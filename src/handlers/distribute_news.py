@@ -3,7 +3,7 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from src.models.news import NewsDigest
+from src.models.news import NewsDigest, build_coverage_notice, normalize_digest
 from src.services.bedrock_client import run_news_agent
 from src.services.html_renderer import render_news_email
 from src.services.parameter_store import AppConfig, load_config
@@ -23,18 +23,19 @@ def _today_jst() -> str:
     return datetime.now(JST).strftime("%Y-%m-%d")
 
 
-def _send_email(config: AppConfig, digest: NewsDigest, today: str) -> str:
+def _send_email(config: AppConfig, digest: NewsDigest, today: str, notice: str | None) -> str:
     """SES 経由で HTML メールを送信し、SES MessageId を返す。
 
     Args:
         config: Parameter Store 由来の設定（sender_email / recipient_emails 必須）。
         digest: Bedrock から取得したニュース。
         today: 件名と本文に埋め込む日付。
+        notice: カバレッジ不足時の通知文（不足なしなら None）。
 
     Returns:
         SES MessageId。
     """
-    html_body = render_news_email(digest=digest, date=today)
+    html_body = render_news_email(digest=digest, date=today, notice=notice)
     subject = f"[カチタス Daily News] {today} 本日の不動産ニュース"
     return send_html_email(
         sender=config.sender_email,
@@ -82,12 +83,17 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     )
     # 既知の失効ホスト（例: housenews.jp → www.housenews.jp）を分配前に補正する。
     digest = apply_url_rewrites(digest)
-    logger.info("digest fetched: items=%d", len(digest.items))
+    # 件数規整（カテゴリ上限・総数の截断）を行い、カバレッジ不足時の通知文を生成する。
+    digest = normalize_digest(digest)
+    coverage_notice = build_coverage_notice(digest)
+    logger.info(
+        "digest fetched: items=%d, shortfall=%s", len(digest.items), bool(coverage_notice)
+    )
 
     result: dict[str, Any] = {"statusCode": 200, "date": today}
 
     if config.email_enabled:
-        result["sesMessageId"] = _send_email(config, digest, today)
+        result["sesMessageId"] = _send_email(config, digest, today, coverage_notice)
         result["recipientCount"] = len(config.recipient_emails)
     else:
         logger.info("email skipped: recipient_emails が空")
@@ -105,6 +111,7 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
                 webhook_url=webhook_url,
                 digest=digest,
                 date=today,
+                notice=coverage_notice,
             )
             logger.info("slack webhook done: %d/%d", idx, webhook_count)
         result["slackMessageCount"] = slack_total

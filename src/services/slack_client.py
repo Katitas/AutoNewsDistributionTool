@@ -164,28 +164,35 @@ def _post(webhook_url: str, payload: dict[str, Any], *, category: str | None = N
         )
 
 
-def send_news_by_category(*, webhook_url: str, digest: NewsDigest, date: str) -> int:
-    """ニュースをカテゴリ別にグルーピングし、各カテゴリ1メッセージとして Slack に送信する。
+def send_news_by_category(
+    *, webhook_url: str, digest: NewsDigest, date: str, notice: str | None = None
+) -> int:
+    """ニュースをカテゴリ別に各1メッセージとして Slack に送信する。
 
-    1メッセージあたりのブロック数を抑え、各カテゴリの可読性を確保するための設計。
-    Block Kit の制限（1メッセージ50ブロック）に対し、5件以下なら必ず収まる。
-
-    NOTE: 部分失敗時のリトライで重複送信が起こりうる（冪等性は未保証）。
-    現状要件では許容範囲。
-
-    Args:
-        webhook_url: Slack Incoming Webhook URL。
-        digest: Bedrock から取得した NewsDigest（全6カテゴリ各5件・計30件）。
-        date: 配信対象日（YYYY-MM-DD）。
+    notice が与えられた場合、カテゴリ別送信の前に不足通知を1メッセージ投稿する。
 
     Returns:
-        送信したメッセージ数（= ユニークカテゴリ数）。
+        送信したメッセージ数（notice ありなら +1）。
 
     Raises:
-        SlackSendError: いずれかのカテゴリ送信が失敗した時点で即座に投げる（残りは送らない）。
+        SlackSendError: いずれかの送信が失敗した時点で即座に投げる。
     """
-    grouped = _group_by_category(digest)
     sent_count = 0
+    if notice:
+        notice_payload = {
+            "blocks": [
+                {
+                    "type": "section",
+                    "text": {"type": "mrkdwn", "text": f"⚠️ {_escape_mrkdwn(notice)}"},
+                }
+            ],
+            "text": notice,
+        }
+        _post(webhook_url, notice_payload, category=None)
+        sent_count += 1
+        logger.info("slack notice sent")
+
+    grouped = _group_by_category(digest)
     for category, items in grouped.items():
         payload = {
             "blocks": _build_blocks(category, items, date),

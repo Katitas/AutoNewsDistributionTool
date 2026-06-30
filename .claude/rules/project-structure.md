@@ -40,6 +40,7 @@ AutoNewsDistributionTool/
 |----------|------|
 | `src/handlers/fetch_news.py` | Bedrockニュース取得・要約ハンドラー |
 | `src/handlers/send_email.py` | SESメール送信ハンドラー |
+| `src/models/news.py` | NewsModel 定義・normalize_digest（件数截断）・build_coverage_notice（不足通知） |
 | `src/services/url_normalizer.py` | 配信前の記事 URL 補正（既知失効ホストの書き換え。例: housenews.jp→www.housenews.jp） |
 | `infra/template.yaml` | CloudFormation メインスタック定義 |
 | `requirements.txt` | Python依存パッケージ |
@@ -63,6 +64,7 @@ AutoNewsDistributionTool/
 
 | ソースコードの範囲 | 対応する設計書 | 備考 |
 |-------------------|--------------|------|
+| src/models/news.py の関連性フィルタ・補填・通知 | docs/plans/2026-06-30-01-news-relevance-filter.md | 関連性フィルタ＋補填＋不足通知 |
 <!-- 例:
 | src/handlers/fetch_news.py | docs/design/01_ニュース取得設計.md | Bedrock呼び出し仕様 |
 | src/handlers/send_email.py | docs/design/02_メール配信設計.md | SES送信仕様 |

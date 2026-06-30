@@ -1,14 +1,15 @@
 """テスト用 NewsDigest / NewsItem ファクトリ。
 
-NewsDigest は「全カテゴリ各 ITEMS_PER_CATEGORY 件・計 TOTAL_ITEMS 件」を強制するため、
-テストでは常にバランスの取れた完全な digest を組み立てる必要がある。
+NewsDigest の目標は全カテゴリ各 ITEMS_PER_CATEGORY 件・計 TARGET_TOTAL_ITEMS 件だが、
+件数は可変（不足を許容）。テストでは用途に応じて make_balanced_items（完全な30件）と
+make_items（カテゴリ→件数を指定した任意構成）を使い分ける。
 本モジュールはそのボイラープレートを一元化する。
 """
 
 from src.models.news import (
     CATEGORIES,
     ITEMS_PER_CATEGORY,
-    TOTAL_ITEMS,
+    TARGET_TOTAL_ITEMS,
     NewsDigest,
     NewsItem,
 )
@@ -50,7 +51,7 @@ def make_balanced_items(
     summary: str | None = None,
     source_urls: list[str] | None = None,
 ) -> list[NewsItem]:
-    """CATEGORIES 順に各カテゴリ ITEMS_PER_CATEGORY 件、計 TOTAL_ITEMS 件を生成する。
+    """CATEGORIES 順に各カテゴリ ITEMS_PER_CATEGORY 件、計 TARGET_TOTAL_ITEMS 件を生成する。
 
     Args:
         title_prefix: タイトルの接頭辞（`{prefix} {idx}` で連番化）。
@@ -60,7 +61,7 @@ def make_balanced_items(
         source_urls: 先頭から順に割り当てる URL。不足分は url_prefix で補完する。
     """
     items: list[NewsItem] = []
-    for idx in range(TOTAL_ITEMS):
+    for idx in range(TARGET_TOTAL_ITEMS):
         category = CATEGORIES[idx // ITEMS_PER_CATEGORY]
         if source_urls is not None and idx < len(source_urls):
             url = source_urls[idx]
@@ -77,6 +78,17 @@ def make_balanced_items(
     return items
 
 
+def make_items(counts: dict[str, int]) -> list[NewsItem]:
+    """カテゴリ→件数の指定で任意構成の NewsItem 群を生成する（不足・偏り・超過テスト用）。"""
+    items: list[NewsItem] = []
+    for category, n in counts.items():
+        for i in range(n):
+            items.append(
+                make_item(category=category, source_url=f"https://example.com/{category}/{i}")
+            )
+    return items
+
+
 def make_digest(**kwargs) -> NewsDigest:
-    """検証を通過する完全な NewsDigest（計 TOTAL_ITEMS 件）を作る。"""
+    """検証を通過する完全な NewsDigest（計 TARGET_TOTAL_ITEMS 件）を作る。"""
     return NewsDigest(items=make_balanced_items(**kwargs))

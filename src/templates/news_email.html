@@ -83,6 +83,23 @@
                         </td>
                     </tr>
 
+                    <!-- ===== Coverage notice banner ===== -->
+                    {% if notice %}
+                    <tr>
+                        <td class="px-mobile" style="padding: 20px 40px 0 40px;">
+                            <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#fdf0d5; border-left:4px solid #d4a04a; border-radius:6px;">
+                                <tr>
+                                    <td style="padding:14px 18px;">
+                                        <p style="margin:0; font-size:13px; color:#9a5a1a; line-height:1.65;">
+                                            ⚠️ {{ notice }}
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    {% endif %}
+
                     <!-- ===== News Items ===== -->
                     {% for item in items %}
                     <tr>

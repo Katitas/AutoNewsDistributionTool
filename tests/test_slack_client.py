@@ -121,3 +121,24 @@ class TestSendNewsByCategory:
 
         with pytest.raises(SlackSendError, match="HTTP error"):
             send_news_by_category(webhook_url=WEBHOOK, digest=sample_digest, date="2026-05-01")
+
+    def test_notice_prepends_message(self, mocker, sample_digest: NewsDigest) -> None:
+        mock_urlopen = mocker.patch.object(
+            slack_client.urllib.request, "urlopen", return_value=_ok_response()
+        )
+        sent = send_news_by_category(
+            webhook_url=WEBHOOK, digest=sample_digest, date="2026-05-01",
+            notice="不足カテゴリ: 海外不動産(0件)",
+        )
+        # 先頭の通知メッセージ + カテゴリ別6メッセージ = 7
+        assert sent == len(CATEGORIES) + 1
+        assert mock_urlopen.call_count == len(CATEGORIES) + 1
+
+    def test_no_notice_no_extra_message(self, mocker, sample_digest: NewsDigest) -> None:
+        mocker.patch.object(
+            slack_client.urllib.request, "urlopen", return_value=_ok_response()
+        )
+        sent = send_news_by_category(
+            webhook_url=WEBHOOK, digest=sample_digest, date="2026-05-01", notice=None
+        )
+        assert sent == len(CATEGORIES)

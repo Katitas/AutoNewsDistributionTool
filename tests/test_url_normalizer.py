@@ -21,6 +21,13 @@ class TestNormalizeUrl:
             == "https://www.housenews.jp/articles/123?ref=x"
         )
 
+    def test_rewrites_dreamnews_host(self) -> None:
+        """www 無しの dreamnews.jp はホストのみ書き換わり、パス・クエリは保持される。"""
+        assert (
+            normalize_url("https://dreamnews.jp/press/0000123456/?x=1")
+            == "https://www.dreamnews.jp/press/0000123456/?x=1"
+        )
+
     def test_already_www_is_unchanged(self) -> None:
         """既に www 付きの正しいホストは変更されない。"""
         url = "https://www.housenews.jp/articles/123"

@@ -1,4 +1,4 @@
-from src.models.news import TOTAL_ITEMS, NewsDigest
+from src.models.news import TARGET_TOTAL_ITEMS, NewsDigest
 from src.services.html_renderer import (
     CATEGORY_COLORS,
     CATEGORY_TEXT_COLORS,
@@ -10,7 +10,7 @@ class TestRenderNewsEmail:
     def test_contains_date_and_count(self, sample_digest: NewsDigest) -> None:
         html = render_news_email(digest=sample_digest, date="2026-05-01")
         assert "2026-05-01" in html
-        assert str(TOTAL_ITEMS) in html  # items count（計30件）
+        assert str(TARGET_TOTAL_ITEMS) in html  # items count（計30件）
 
     def test_contains_all_titles(self, sample_digest: NewsDigest) -> None:
         html = render_news_email(digest=sample_digest, date="2026-05-01")
@@ -42,3 +42,12 @@ class TestRenderNewsEmail:
         html = render_news_email(digest=digest, date="2026-05-01")
         assert "<script>alert(1)</script>" not in html
         assert "&lt;script&gt;" in html
+
+    def test_notice_rendered_when_present(self, sample_digest: NewsDigest) -> None:
+        notice = "本日は関連ニュースが計10件にとどまり…不足カテゴリ: 海外不動産(0件)"
+        html = render_news_email(digest=sample_digest, date="2026-05-01", notice=notice)
+        assert "海外不動産(0件)" in html
+
+    def test_notice_absent_when_none(self, sample_digest: NewsDigest) -> None:
+        html = render_news_email(digest=sample_digest, date="2026-05-01", notice=None)
+        assert "不足カテゴリ" not in html
